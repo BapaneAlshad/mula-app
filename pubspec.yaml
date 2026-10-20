@@ -1,0 +1,30 @@
+name: mula
+description: "MULA — Mulai kecil. Tumbuh setiap hari. Pendamping rutinitas offline untuk Anggit."
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.9.0 <4.0.0'
+  flutter: '>=3.35.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.6.1
+  sqflite: ^2.4.2
+  path: ^1.9.1
+  shared_preferences: ^2.5.3
+  flutter_local_notifications: ^19.5.0
+  android_alarm_manager_plus: ^4.0.8
+  timezone: ^0.10.1
+  local_auth: ^2.3.0
+  intl: ^0.20.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  sqflite_common_ffi: ^2.3.6
+
+flutter:
+  uses-material-design: true
