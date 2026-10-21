@@ -117,7 +117,7 @@ class MulaRepository {
         'status': status,
         'completedAt': status == 'Selesai' ? _now().toIso8601String() : null,
         'skippedReason': {'Dilewati', 'Ditunda'}.contains(status) ? reason?.trim() : null,
-        if (status == 'Sedang berjalan' && task.text('startedAt').isEmpty)
+        if ({'Sedang berjalan', 'Selesai'}.contains(status) && task.text('startedAt').isEmpty)
           'startedAt': _now().toUtc().toIso8601String(),
       };
       final checklist = DailyScoreCalculator.decodeChecklist(task.text('subtasksJson'));
@@ -162,7 +162,7 @@ class MulaRepository {
   }) async {
     await saveTask(date: date, title: title, description: '', category: category,
         estimatedMinutes: estimatedMinutes, energyLevel: 'Sedang', priority: priority,
-        subtasks: const [], pointWeight: estimatedMinutes.clamp(1, 100));
+        subtasks: const [], pointWeight: estimatedMinutes.clamp(1, 100).toInt());
   }
 
   Future<void> saveTask({
@@ -830,12 +830,14 @@ class MulaRepository {
         where: 'userId = ? AND date = ?', whereArgs: [_userId, date]);
     final minimumMode = dayScores.single.text('dayMode') == 'Minimum';
     final scoredTasks = minimumMode ? minimumTasks : tasks;
-    final sessions = await database.query('focus_sessions',
-        where: 'userId = ?', whereArgs: [_userId]);
+    final sessions = await database.rawQuery('''
+      SELECT f.*, t.minimumKey AS taskMinimumKey
+      FROM focus_sessions f LEFT JOIN daily_tasks t ON t.id = f.taskId
+      WHERE f.userId = ?''', [_userId]);
     final minimumIds = minimumTasks.map((task) => task.number('id')).toSet();
     final scoredSessions = minimumMode
         ? sessions.where((session) => minimumIds.contains(session.number('taskId', -1))).toList()
-        : sessions.where((session) => !minimumIds.contains(session.number('taskId', -1))).toList();
+        : sessions.where((session) => session.text('taskMinimumKey').isEmpty).toList();
     final score = DailyScoreCalculator.calculate(
         tasks: scoredTasks, sessions: scoredSessions, day: DateTime.parse(date), now: _now());
     final completed = scoredTasks.where((task) => task.text('status') == 'Selesai');
