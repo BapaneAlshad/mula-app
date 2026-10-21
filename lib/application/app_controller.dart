@@ -2,12 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/local/app_database.dart';
 import '../data/mula_repository.dart';
 import '../domain/app_snapshot.dart';
 import '../domain/focus_clock.dart';
+import '../services/preference_mirror_service.dart';
 import '../services/privacy_service.dart';
 import '../services/reminder_service.dart';
 
@@ -23,6 +23,7 @@ final repositoryProvider = Provider<MulaRepository>((ref) => MulaRepository(
 ));
 final reminderServiceProvider = Provider<ReminderService>((ref) => ReminderService());
 final privacyServiceProvider = Provider<PrivacyService>((ref) => PrivacyService());
+final preferenceMirrorProvider = Provider<PreferenceMirrorService>((ref) => PreferenceMirrorService());
 final thoughtsUnlockedProvider = StateProvider<bool>((ref) => false);
 final planningHandoffProvider = StateProvider<int>((ref) => 0);
 
@@ -44,7 +45,7 @@ final appControllerProvider = AsyncNotifierProvider<AppController, AppSnapshot>(
 class AppController extends AsyncNotifier<AppSnapshot> {
   late MulaRepository _repository;
   late ReminderService _reminders;
-  SharedPreferences? _preferences;
+  late PreferenceMirrorService _preferenceMirror;
   Future<void> _pending = Future<void>.value();
   bool _disposed = false;
   bool _refreshingClock = false;
@@ -58,8 +59,9 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     _repository = ref.watch(repositoryProvider);
     _reminders = ref.watch(reminderServiceProvider);
     _now = ref.watch(appNowProvider);
-    _preferences = await SharedPreferences.getInstance();
+    _preferenceMirror = ref.watch(preferenceMirrorProvider);
     await _repository.initialize();
+    await _preferenceMirror.initialize();
     ref.listen<DateTime>(clockProvider, _onTick);
     await _reconcilePlanning();
     final snapshot = await _repository.loadDay(_now());
@@ -324,7 +326,7 @@ class AppController extends AsyncNotifier<AppSnapshot> {
 
   Future<void> _writePreference(String key, String value) async {
     await _repository.savePreference(key, value);
-    await _preferences?.setString(key, value);
+    await _preferenceMirror.writeString(key, value);
   }
 
   Future<void> savePreference(String key, String value) =>

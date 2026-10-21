@@ -38,3 +38,4 @@ android/app/src/main/java/io/
 Thumbs.db
 *.log
 __pycache__/
+.codex-remote-attachments/

@@ -27,6 +27,10 @@ export function configureGradle(source, kotlin) {
       'sourceCompatibility = JavaVersion.VERSION_17', 'Java sourceCompatibility');
     required(/targetCompatibility\s*=\s*JavaVersion\.VERSION_[A-Z0-9_]+/,
       'targetCompatibility = JavaVersion.VERSION_17', 'Java targetCompatibility');
+    required(/\brelease\s*\{/,
+      'release {\n' +
+      '            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")',
+      'release build type');
     result = result.replace(/jvmTarget\s*=\s*[^\n}]+/g, java17Target);
     result += '\n// Required by scheduled notifications and local authentication.\n' +
       'dependencies {\n' +
@@ -45,6 +49,10 @@ export function configureGradle(source, kotlin) {
       'sourceCompatibility JavaVersion.VERSION_17', 'Java sourceCompatibility');
     required(/targetCompatibility\s*(?:=\s*)?JavaVersion\.VERSION_[A-Z0-9_]+/,
       'targetCompatibility JavaVersion.VERSION_17', 'Java targetCompatibility');
+    required(/\brelease\s*\{/,
+      'release {\n' +
+      '            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"',
+      'release build type');
     result = result.replace(/jvmTarget\s*=\s*[^\n}]+/g, java17Target);
     result += '\n// Required by scheduled notifications and local authentication.\n' +
       'dependencies {\n' +
@@ -63,6 +71,9 @@ export function configureAndroid(root = process.cwd()) {
   if (!fs.existsSync(file)) {
     throw new Error('Run flutter create in GitHub Actions before native configuration.');
   }
+  if (!fs.existsSync(path.join(root, 'android/app/proguard-rules.pro'))) {
+    throw new Error('Restore MULA android/app/proguard-rules.pro before native configuration.');
+  }
   const source = fs.readFileSync(file, 'utf8');
   if (source.includes('com.android.tools:desugar_jdk_libs:2.1.4')) {
     throw new Error('Android engine is already configured. Generate it once per build.');
@@ -77,7 +88,7 @@ export function configureAndroid(root = process.cwd()) {
       fs.unlinkSync(sampleTest);
     }
   }
-  process.stdout.write('Android configured: SDK >=36, minSdk >=24, Java 17, desugaring, AppCompat.\n');
+  process.stdout.write('Android configured: SDK >=36, minSdk >=24, Java 17, desugaring, AppCompat, JNI R8 keep rules.\n');
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

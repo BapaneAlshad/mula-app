@@ -16,7 +16,7 @@ jobs:
   build:
     name: Analyze, test, and build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -31,6 +31,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: '3.47.7'
           cache: true
 
       - name: Generate Android engine and restore MULA source
@@ -40,17 +41,22 @@ jobs:
           backup_dir="$(mktemp -d "${RUNNER_TEMP}/mula-source.XXXXXX")"
           cp -r lib "$backup_dir/lib"
           cp pubspec.yaml "$backup_dir/pubspec.yaml"
+          cp pubspec.lock "$backup_dir/pubspec.lock"
           cp android/app/src/main/AndroidManifest.xml "$backup_dir/AndroidManifest.xml"
           cp -r android "$backup_dir/android"
           flutter create --org com.anggit.mula --project-name mula --platforms android --no-pub .
           cp -r "$backup_dir/lib/." lib/
           cp "$backup_dir/pubspec.yaml" pubspec.yaml
+          cp "$backup_dir/pubspec.lock" pubspec.lock
           cp -r "$backup_dir/android/." android/
           cp "$backup_dir/AndroidManifest.xml" android/app/src/main/AndroidManifest.xml
           node tool/configure_android.mjs
 
       - name: Resolve dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
+
+      - name: Test Android release configuration
+        run: node --test tool/configure_android.test.mjs
 
       - name: Analyze Dart source
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -60,6 +66,32 @@ jobs:
 
       - name: Build release APK
         run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Enable emulator hardware acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch and verify the exact release APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: default
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: node tool/android_release_smoke.mjs build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Android startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MULA-Android-Startup-Diagnostics
+          path: build/smoke/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4

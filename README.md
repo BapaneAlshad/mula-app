@@ -88,4 +88,12 @@ Pengujian Flutter dijalankan oleh GitHub Actions. Tidak ada klaim analyzer, `flu
 
 Versi API dipilih dari dokumentasi paket resmi: [Riverpod 2.6.1](https://pub.dev/packages/flutter_riverpod/versions/2.6.1), [notifikasi 19.5.0](https://pub.dev/packages/flutter_local_notifications/versions/19.5.0), [AlarmManager 4.0.8](https://pub.dev/packages/android_alarm_manager_plus/versions/4.0.8), [local_auth 2.3.0](https://pub.dev/packages/local_auth/versions/2.3.0), dan [timezone 0.10.1](https://pub.dev/packages/timezone/versions/0.10.1). Tidak ada `riverpod_generator`, `freezed`, atau `build_runner`.
 
-`pubspec.lock` belum dibuat karena resolusi Flutter dilakukan di cloud. Setelah build pertama berhasil, unduh artifact **MULA-Dependency-Lock**, lalu simpan `pubspec.lock` di repository untuk mematok dependency aplikasi pada build selanjutnya.
+`pubspec.lock` disimpan dari resolusi cloud yang sudah digunakan untuk build aplikasi. Build berikutnya mempertahankan versi dependency tersebut; artifact **MULA-Dependency-Lock** tetap tersedia untuk pemeriksaan hasil resolusi.
+
+## Perbaikan startup Android 1.0.1
+
+`shared_preferences_android` 2.5.1 memakai JNI untuk memanggil fungsi Kotlin. R8 pada build release dapat mengubah nama kelas coroutine yang dibutuhkan JNI sehingga `SharedPreferencesApiRegistrar.getAll()` melempar `NoSuchMethodError`. [Laporan Flutter](https://github.com/flutter/flutter/issues/194649) dan [perbaikan upstream](https://github.com/flutter/packages/pull/13311) menjelaskan aturan keep yang diperlukan.
+
+MULA mempertahankan enam kelas Kotlin tersebut lewat `android/app/proguard-rules.pro`, yang dipasang eksplisit ke konfigurasi release oleh script pembuat Android. SQLite dibuka terlebih dahulu. Salinan preferensi di SharedPreferences bersifat tambahan; bila plugin gagal, perubahan tetap tersimpan di SQLite dan aplikasi tetap dapat dibuka. Perbaikan ini tidak menghapus atau mengganti database pengguna.
+
+Selain tes Dart dan konfigurasi Gradle, workflow memasang APK release yang akan dibagikan pada emulator Android di GitHub Actions. Pemeriksaan menjalankan onboarding, navigasi, penulisan preferensi, serta membuka ulang aplikasi, dan menolak error JNI maupun kegagalan salinan preferensi di logcat. Hasil screenshot, XML layar, dan logcat tersedia sebagai artifact diagnostik. Flutter SDK dan emulator tetap hanya berjalan di cloud.
