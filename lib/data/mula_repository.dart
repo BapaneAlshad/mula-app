@@ -267,7 +267,9 @@ class MulaRepository {
     await _mutateTask(previous.number('id'), (transaction, current) async {
       // Undo only applies to the swipe completion; preserve a later user edit.
       if (current.text('status') != 'Selesai' ||
-          current.number('revision') != previous.number('revision') + 1) return;
+          current.number('revision') != previous.number('revision') + 1) {
+        return;
+      }
       final completed = DateTime.tryParse(current.text('completedAt'));
       if (completed == null) return;
       final elapsed = _now().difference(completed);
@@ -421,7 +423,9 @@ class MulaRepository {
     if (top.isEmpty) return true;
     final task = top.single;
     if (task.text('startedAt').isNotEmpty ||
-        {'Sedang berjalan', 'Selesai'}.contains(task.text('status'))) return true;
+        {'Sedang berjalan', 'Selesai'}.contains(task.text('status'))) {
+      return true;
+    }
     final sessions = await database.query('focus_sessions', columns: ['id'],
         where: 'userId = ? AND taskId = ?', whereArgs: [_userId, task.number('id')], limit: 1);
     return sessions.isNotEmpty;
@@ -523,7 +527,7 @@ class MulaRepository {
         await transaction.update('focus_sessions', {
           'status': expired ? 'Selesai' : 'Dibatalkan', 'actualSeconds': elapsed,
           'cancelReason': expired ? null : 'Perencanaan selesai; kembali ke Top 1.',
-          'completedAt': (expired ? activeEnd! : now).toUtc().toIso8601String(),
+          'completedAt': (expired ? activeEnd : now).toUtc().toIso8601String(),
         }, where: 'id = ?', whereArgs: [session.number('id')]);
       }
       if (!canReuse) {
@@ -682,7 +686,9 @@ class MulaRepository {
       final started = DateTime.tryParse(session.text('startedAt'))?.toLocal();
       final completed = DateTime.tryParse(session.text('completedAt'))?.toLocal();
       if (started == null || completed == null || dateKey(started) != date ||
-          dateKey(completed) != date || session.number('actualSeconds') <= 0) return false;
+          dateKey(completed) != date || session.number('actualSeconds') <= 0) {
+        return false;
+      }
       final startMinute = started.hour * 60 + started.minute;
       final endMinute = completed.hour * 60 + completed.minute;
       return startMinute >= 270 && startMinute < 705 && endMinute <= 705;

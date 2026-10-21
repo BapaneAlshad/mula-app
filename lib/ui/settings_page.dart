@@ -166,13 +166,15 @@ class _ProfileDialogState extends State<_ProfileDialog> {
 
   Future<void> _chooseTime(bool wake) async {
     final value = await showTimePicker(context: context, initialTime: wake ? _wake : _sleep);
-    if (value != null && mounted) setState(() {
-      if (wake) {
-        _wake = value;
-      } else {
-        _sleep = value;
-      }
-    });
+    if (value != null && mounted) {
+      setState(() {
+        if (wake) {
+          _wake = value;
+        } else {
+          _sleep = value;
+        }
+      });
+    }
   }
 
   @override

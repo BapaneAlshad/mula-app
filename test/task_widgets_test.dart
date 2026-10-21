@@ -102,6 +102,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byKey(const ValueKey('task-swipe-1')), const Offset(-600, 0));
     await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
     await tester.tap(find.text('Lewati dengan alasan'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('save-task-status')));

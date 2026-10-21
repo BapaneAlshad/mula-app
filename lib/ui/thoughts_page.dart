@@ -31,7 +31,7 @@ class _ThoughtsPageState extends ConsumerState<ThoughtsPage> with PersistedActio
         const SizedBox(height: 18),
         FilledButton.icon(onPressed: saving ? null : () => perform(() async {
           final unlocked = await actions.unlockThoughts();
-          if (!unlocked && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Catatan tetap terkunci. Autentikasi belum berhasil.')));
+          if (!unlocked && context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Catatan tetap terkunci. Autentikasi belum berhasil.')));
         }), icon: const Icon(Icons.fingerprint_rounded), label: const Text('Buka ruang pikiran')),
       ]);
     }

@@ -157,25 +157,31 @@ class _TaskCardState extends ConsumerState<TaskCard> with PersistedActions<TaskC
     final status = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * .85),
       builder: (sheetContext) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Sesuaikan langkah berikutnya', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            for (final option in const <(String, String, IconData)>[
-              ('Belum mulai', 'Belum selesai / kembalikan ke belum mulai', Icons.radio_button_unchecked_rounded),
-              ('Sedang berjalan', 'Sedang dikerjakan', Icons.play_circle_outline_rounded),
-              ('Ditunda', 'Tunda dengan alasan', Icons.schedule_rounded),
-              ('Dilewati', 'Lewati dengan alasan', Icons.skip_next_rounded),
-            ])
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(option.$3),
-                title: Text(option.$2),
-                onTap: () => Navigator.pop(sheetContext, option.$1),
-              ),
-          ]),
+          padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Sesuaikan langkah berikutnya', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              for (final option in const <(String, String, IconData)>[
+                ('Belum mulai', 'Belum selesai / kembalikan ke belum mulai', Icons.radio_button_unchecked_rounded),
+                ('Sedang berjalan', 'Sedang dikerjakan', Icons.play_circle_outline_rounded),
+                ('Ditunda', 'Tunda dengan alasan', Icons.schedule_rounded),
+                ('Dilewati', 'Lewati dengan alasan', Icons.skip_next_rounded),
+              ])
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(option.$3),
+                  title: Text(option.$2),
+                  onTap: () => Navigator.pop(sheetContext, option.$1),
+                ),
+            ]),
+          ),
         ),
       ),
     );

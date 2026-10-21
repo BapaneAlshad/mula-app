@@ -13,16 +13,19 @@ Future<void> showTaskEditor(
   DbRow? task,
   String initialPriority = 'Reguler',
   String initialCategory = 'Pribadi',
-}) => showDialog<void>(
-  context: context,
-  barrierDismissible: false,
-  builder: (_) => _TaskEditor(
-    task: task,
-    now: ref.read(clockProvider),
-    initialPriority: initialPriority,
-    initialCategory: initialCategory,
-  ),
-);
+}) {
+  final now = ref.read(clockProvider);
+  return showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => _TaskEditor(
+      task: task,
+      now: now,
+      initialPriority: initialPriority,
+      initialCategory: initialCategory,
+    ),
+  );
+}
 
 class _TaskEditor extends ConsumerStatefulWidget {
   const _TaskEditor({

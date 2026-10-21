@@ -144,7 +144,7 @@ class DailyScoreCalculator {
     try {
       final decoded = jsonDecode(json);
       if (decoded is! List) return [];
-      return decoded.whereType<Map>().map((item) => {
+      return decoded.whereType<Map<String, dynamic>>().map((item) => {
         'title': (item['title'] ?? '').toString(),
         'done': item['done'] == true,
       }).toList();
