@@ -17,12 +17,14 @@ final databaseProvider = Provider<AppDatabase>((ref) {
   return database;
 });
 
-final repositoryProvider = Provider<MulaRepository>(
-  (ref) => MulaRepository(ref.watch(databaseProvider)),
-);
+final appNowProvider = Provider<DateTime Function()>((ref) => DateTime.now);
+final repositoryProvider = Provider<MulaRepository>((ref) => MulaRepository(
+  ref.watch(databaseProvider), now: ref.watch(appNowProvider),
+));
 final reminderServiceProvider = Provider<ReminderService>((ref) => ReminderService());
 final privacyServiceProvider = Provider<PrivacyService>((ref) => PrivacyService());
 final thoughtsUnlockedProvider = StateProvider<bool>((ref) => false);
+final planningHandoffProvider = StateProvider<int>((ref) => 0);
 
 final _clockStreamProvider = StreamProvider<DateTime>((ref) async* {
   yield DateTime.now();
@@ -47,6 +49,7 @@ class AppController extends AsyncNotifier<AppSnapshot> {
   bool _disposed = false;
   bool _refreshingClock = false;
   bool _autoFinishing = false;
+  DateTime Function() _now = DateTime.now;
 
   @override
   Future<AppSnapshot> build() async {
@@ -54,25 +57,36 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     ref.onDispose(() => _disposed = true);
     _repository = ref.watch(repositoryProvider);
     _reminders = ref.watch(reminderServiceProvider);
+    _now = ref.watch(appNowProvider);
     _preferences = await SharedPreferences.getInstance();
     await _repository.initialize();
     ref.listen<DateTime>(clockProvider, _onTick);
-    final snapshot = await _repository.loadDay(DateTime.now());
+    await _reconcilePlanning();
+    final snapshot = await _repository.loadDay(_now());
     await _restoreReminders(snapshot);
-    return _repository.loadDay(DateTime.now());
+    return _repository.loadDay(_now());
   }
 
   Future<void> _restoreReminders(AppSnapshot snapshot) async {
     try {
       await _reminders.initialize();
-      if (snapshot.preferences['reminders'] == 'true') {
+      if (snapshot.preferences['reminders'] == 'true' && snapshot.score.text('dayMode') != 'Minimum') {
         await _reminders.scheduleTemplates(snapshot.templates);
+      } else if (snapshot.score.text('dayMode') == 'Minimum') {
+        await _reminders.cancelSchedule();
       }
       if (snapshot.activeFocus != null) {
         final message = await _reminders.scheduleFocus(
           snapshot.activeFocus!, requestPermission: false,
         );
         await _repository.savePreference('reminderStatus', message);
+      }
+      if (snapshot.planningSession != null &&
+          snapshot.planningSession!.text('status') == 'Berjalan') {
+        await _reminders.schedulePlanning(snapshot.planningSession!);
+      }
+      if (snapshot.valorantSession != null && snapshot.valorantSession!['confirmedAt'] == null) {
+        await _reminders.scheduleValorant(snapshot.valorantSession!, requestPermission: false);
       }
     } catch (error) {
       await _repository.savePreference(
@@ -103,7 +117,11 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     final changedDay = snapshot.date != _dayKey(now);
     final changedMinute = previous != null &&
         (previous.minute != now.minute || previous.hour != now.hour);
-    if (!_refreshingClock && (changedDay || (session != null && changedMinute))) {
+    final planning = snapshot.planningSession;
+    final planningDeadline = DateTime.tryParse(planning?.text('deadlineAt') ?? '');
+    final planningDue = planning?.text('status') == 'Berjalan' &&
+        planningDeadline != null && !now.isBefore(planningDeadline);
+    if (!_refreshingClock && (changedDay || changedMinute || planningDue)) {
       _refreshingClock = true;
       unawaited(refresh().whenComplete(() {
         _refreshingClock = false;
@@ -119,27 +137,46 @@ class AppController extends AsyncNotifier<AppSnapshot> {
       '${date.day.toString().padLeft(2, '0')}';
 
   Future<void> _reload() async {
-    final snapshot = await _repository.loadDay(DateTime.now());
+    await _reconcilePlanning();
+    final snapshot = await _repository.loadDay(_now());
     if (!_disposed) state = AsyncData(snapshot);
   }
 
+  Future<void> _reconcilePlanning() async {
+    final started = await _repository.completePlanningAndStartTop1();
+    if (!started) return;
+    await _writePreference('selectedTab', '1');
+    final snapshot = await _repository.loadDay(_now());
+    try {
+      await _reminders.cancelPlanning();
+      if (snapshot.activeFocus != null) {
+        await _reminders.scheduleFocus(snapshot.activeFocus!, requestPermission: false);
+      }
+    } catch (error) {
+      await _repository.savePreference('reminderStatus', 'Top 1 sudah dimulai. Alarm: $error');
+    }
+    if (!_disposed) ref.read(planningHandoffProvider.notifier).state++;
+  }
+
   /// Serialize writes while retaining the current screen during disk operations.
-  Future<void> _mutate(Future<void> Function() mutation) {
-    final operation = _pending.then((_) async {
+  Future<T> _mutateValue<T>(Future<T> Function() mutation) {
+    final operation = _pending.then<T>((_) async {
       try {
-        await mutation();
+        return await mutation();
       } finally {
         await _reload();
       }
     });
-    _pending = operation.catchError((Object error, StackTrace stack) {
+    _pending = operation.then<void>((value) {}, onError: (Object error, StackTrace stack) {
       debugPrint('Operasi MULA gagal: $error');
     });
     return operation;
   }
 
+  Future<void> _mutate(Future<void> Function() mutation) => _mutateValue(mutation);
+
   Future<void> refresh() => _mutate(() async {
-    final snapshot = await _repository.loadDay(DateTime.now());
+    final snapshot = await _repository.loadDay(_now());
     if (state.valueOrNull?.date != snapshot.date &&
         snapshot.preferences['reminders'] == 'true') {
       await _restoreReminders(snapshot);
@@ -147,7 +184,13 @@ class AppController extends AsyncNotifier<AppSnapshot> {
   });
 
   Future<void> onResume() => _mutate(() async {
-    final snapshot = await _repository.loadDay(DateTime.now());
+    final planningWasRunning = state.valueOrNull?.planningSession?.text('status') == 'Berjalan';
+    await _reconcilePlanning();
+    final snapshot = await _repository.loadDay(_now());
+    if (planningWasRunning && snapshot.planningSession?.text('status') == 'Dieksekusi') {
+      await _writePreference('selectedTab', '1');
+      if (!_disposed) ref.read(planningHandoffProvider.notifier).state++;
+    }
     await _restoreReminders(snapshot);
   });
 
@@ -175,8 +218,106 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     required int estimatedMinutes,
   }) => _mutate(() => _repository.addTask(
     title: title, category: category, priority: priority,
-    estimatedMinutes: estimatedMinutes, date: _dayKey(DateTime.now()),
+    estimatedMinutes: estimatedMinutes, date: _dayKey(_now()),
   ));
+
+  Future<void> saveTask({
+    int? taskId,
+    required String title,
+    required String description,
+    required String category,
+    String? deadline,
+    required int estimatedMinutes,
+    required String energyLevel,
+    required String priority,
+    required List<DbRow> subtasks,
+    required int pointWeight,
+  }) => _mutate(() async {
+    if (await _repository.completePlanningAndStartTop1()) {
+      await _writePreference('selectedTab', '1');
+      final snapshot = await _repository.loadDay(_now());
+      await _restoreReminders(snapshot);
+      if (!_disposed) ref.read(planningHandoffProvider.notifier).state++;
+      throw StateError('Batas perencanaan habis. Jalankan Top 1 selama 25 menit dahulu.');
+    }
+    await _repository.saveTask(
+      taskId: taskId, date: _dayKey(_now()), title: title,
+      description: description, category: category, deadline: deadline,
+      estimatedMinutes: estimatedMinutes, energyLevel: energyLevel,
+      priority: priority, subtasks: subtasks, pointWeight: pointWeight,
+    );
+  });
+
+  Future<void> assignPriority(int taskId, String priority) =>
+      _mutate(() => _repository.assignPriority(taskId, priority));
+
+  Future<DbRow> completeTaskWithUndo(int taskId) => _mutateValue(() async {
+    final previous = await _repository.captureTaskState(taskId);
+    await _repository.setTaskStatus(taskId, 'Selesai');
+    return <String, Object?>{
+      ...previous, '_undoUntil': _now().add(const Duration(seconds: 5)).toUtc().toIso8601String(),
+    };
+  });
+
+  Future<void> restoreTask(DbRow previous) => _mutate(() async {
+    final until = DateTime.tryParse(previous.text('_undoUntil'));
+    if (until == null || !_now().isBefore(until)) {
+      throw StateError('Waktu Undo sudah habis. Gunakan menu status untuk membuka kembali tugas.');
+    }
+    await _repository.restoreTaskState(previous);
+  });
+
+  Future<void> startPlanning() => _mutate(() async {
+    await _repository.startPlanning();
+    final snapshot = await _repository.loadDay(_now());
+    try {
+      await _reminders.schedulePlanning(snapshot.planningSession!, requestPermission: true);
+    } catch (error) {
+      await _writePreference('reminderStatus', 'Perencanaan 20 menit aktif. Alarm belum tersedia: $error');
+    }
+  });
+
+  Future<void> startFiveMinutes() => _mutate(() async {
+    await _writePreference('sanctuary', 'true');
+    await _writePreference('sanctuaryDate', _dayKey(_now()));
+    final snapshot = await _repository.loadDay(_now());
+    if (snapshot.activeFocus == null) {
+      final candidates = snapshot.score.text('dayMode') == 'Minimum'
+          ? snapshot.minimumTasks.where((task) => task.text('minimumKey') == 'main')
+          : snapshot.tasks.where((task) => task.text('priority') == 'Top 1');
+      final task = candidates.where((task) => task.text('status') != 'Selesai').firstOrNull;
+      await _repository.startFocus(taskId: task?.number('id'), plannedSeconds: 300, mode: 'Langkah kecil');
+      final active = (await _repository.loadDay(_now())).activeFocus;
+      try {
+        if (active != null) await _reminders.scheduleFocus(active);
+      } catch (error) {
+        await _writePreference('reminderStatus', 'Langkah 5 menit aktif. Alarm: $error');
+      }
+    }
+    await _writePreference('selectedTab', '1');
+  });
+
+  Future<void> startValorant() => _mutate(() async {
+    final snapshot = await _repository.loadDay(_now());
+    if (snapshot.valorantGate['allowed'] != true) {
+      throw StateError(snapshot.valorantGate.text('reason', 'VALORANT belum tersedia.'));
+    }
+    await _reminders.requireGameAlarmAccess();
+    final session = await _repository.startValorant();
+    try {
+      await _reminders.scheduleValorant(session);
+    } catch (error) {
+      await _repository.rollbackValorantStart(session.number('id'));
+      await _reminders.cancelValorant();
+      rethrow;
+    }
+  });
+
+  Future<void> confirmValorantClosed() => _mutate(() async {
+    await _repository.confirmValorantClosed();
+    await _reminders.cancelValorant();
+    await _writePreference('selectedTab', '0');
+  });
 
   Future<void> overrideProject({required int taskId, required String project}) =>
       _mutate(() => _repository.overrideProject(taskId: taskId, project: project));
@@ -195,21 +336,31 @@ class AppController extends AsyncNotifier<AppSnapshot> {
   }
 
   Future<void> setDayMode(String mode, {String? reason}) => _mutate(() async {
-    await _repository.saveDayMode(_dayKey(DateTime.now()), mode, reason: reason);
+    await _repository.saveDayMode(_dayKey(_now()), mode, reason: reason);
     await _writePreference('sanctuary', mode == 'Normal' ? 'false' : 'true');
+    await _writePreference('sanctuaryDate', _dayKey(_now()));
+    if (mode == 'Minimum') {
+      await _reminders.cancelSchedule();
+      await _reminders.cancelPlanning();
+    } else if (state.valueOrNull?.preferences['reminders'] == 'true') {
+      final snapshot = await _repository.loadDay(_now());
+      await _reminders.scheduleTemplates(snapshot.templates);
+    }
   });
 
   Future<void> enterSanctuary(String reason) => _mutate(() async {
-    await _repository.saveDayMode(
-      _dayKey(DateTime.now()), reason == 'Mode Hari Buruk' ? 'Minimum' : 'Adaptasi',
-      reason: reason,
-    );
+    if (reason == 'Mode Hari Buruk') {
+      await _repository.saveDayMode(_dayKey(_now()), 'Minimum', reason: reason);
+      await _reminders.cancelSchedule();
+      await _reminders.cancelPlanning();
+    }
     await _repository.recordAnxiety(
       mode: reason, durationSeconds: 0,
       anxietyBefore: state.valueOrNull?.score.number('anxietyScore', 5) ?? 5,
       anxietyAfter: state.valueOrNull?.score.number('anxietyScore', 5) ?? 5,
     );
     await _writePreference('sanctuary', 'true');
+    await _writePreference('sanctuaryDate', _dayKey(_now()));
   });
 
   Future<void> exitSanctuary() => setDayMode('Normal');
@@ -229,18 +380,20 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     required int moodScore, required int anxietyScore, required String notes,
     required String gratitudeNote, required String firstStepTomorrow,
   }) => _mutate(() => _repository.saveReflection(
-    date: _dayKey(DateTime.now()), moodScore: moodScore,
+    date: _dayKey(_now()), moodScore: moodScore,
     anxietyScore: anxietyScore, notes: notes, gratitudeNote: gratitudeNote,
     firstStepTomorrow: firstStepTomorrow,
   ));
 
   Future<void> startFocus({
     int? taskId, required int plannedSeconds, required String mode,
+    bool allowPriorityOverride = false,
   }) => _mutate(() async {
     await _repository.startFocus(
       taskId: taskId, plannedSeconds: plannedSeconds, mode: mode,
+      allowPriorityOverride: allowPriorityOverride,
     );
-    final snapshot = await _repository.loadDay(DateTime.now());
+    final snapshot = await _repository.loadDay(_now());
     try {
       final message = await _reminders.scheduleFocus(snapshot.activeFocus!);
       await _writePreference('reminderStatus', message);
@@ -256,7 +409,7 @@ class AppController extends AsyncNotifier<AppSnapshot> {
       });
 
   Future<void> _autoComplete(int sessionId) => _mutate(() async {
-    final snapshot = await _repository.loadDay(DateTime.now());
+    final snapshot = await _repository.loadDay(_now());
     if (snapshot.activeFocus?.number('id') != sessionId) return;
     // Native notification delivery remains independent from foreground ticks.
     await _repository.finishFocus(expectedSessionId: sessionId);
@@ -272,8 +425,10 @@ class AppController extends AsyncNotifier<AppSnapshot> {
       await _writePreference('reminders', 'false');
       throw StateError('Izin notifikasi belum diberikan. Aktifkan di pengaturan Android.');
     }
-    final snapshot = await _repository.loadDay(DateTime.now());
-    await _reminders.scheduleTemplates(snapshot.templates);
+    final snapshot = await _repository.loadDay(_now());
+    if (snapshot.score.text('dayMode') != 'Minimum') {
+      await _reminders.scheduleTemplates(snapshot.templates);
+    }
     await _writePreference('reminders', 'true');
   });
 
@@ -287,7 +442,7 @@ class AppController extends AsyncNotifier<AppSnapshot> {
   Future<bool> unlockThoughts() async {
     final authenticated = await ref.read(privacyServiceProvider).authenticate();
     if (authenticated) {
-      await savePreference('lastUnlockAt', DateTime.now().toIso8601String());
+      await savePreference('lastUnlockAt', _now().toIso8601String());
       ref.read(thoughtsUnlockedProvider.notifier).state = true;
     }
     return authenticated;

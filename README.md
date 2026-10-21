@@ -42,6 +42,20 @@ Artifact disimpan selama 14 hari. `flutter create` membuat konfigurasi tanda tan
 - Timer fokus menyimpan timestamp sesi. Tampilan sisa waktu dihitung ulang dari selisih waktu sehingga tidak bergantung pada tick saat layar terkunci.
 - Infrastruktur pengingat lokal menggunakan `flutter_local_notifications`, `android_alarm_manager_plus`, dan zona waktu `Asia/Jakarta`. Fitur pikiran sensitif memakai autentikasi perangkat melalui `local_auth`.
 
+## Isi Fase 2
+
+Tab **Hari Ini** menampilkan tanggal, sapaan circadian, MULA Seed, skor otomatis, dan streak. Aksi cepat menyimpan tugas, memulai fokus 5 menit, mengaktifkan Sanctuary saat cemas, serta memarkir pikiran ke SQLite.
+
+- **Normal** menampilkan jadwal lengkap dan tiga slot prioritas unik. Memulai Top 2/3 sebelum Top 1 dimulai meminta pengakuan lewat pengingat lembut.
+- **Hari Buruk / Minimum** menyembunyikan jadwal padat dan menampilkan tujuh checklist dasar. Progres jadwal normal tetap disimpan; skor dihitung dari checklist minimum selama mode ini aktif. Catatan penutupan hari harus ditulis sebelum checklist catatan ditandai selesai.
+- **Hari Adaptasi** meminta salah satu dari enam alasan valid, menonaktifkan konsekuensi harian, dan melindungi streak. Aksi cemas atau stuck hanya mengaktifkan suasana tenang; perlindungan Adaptasi tetap memerlukan alasan.
+- Perencanaan dapat dimulai pukul **08.00–09.30**, satu kali per hari. Deadline 20 menit disimpan di `planning_sessions`. Ketika habis, form ditutup dan aplikasi berpindah ke sesi fokus Top 1 selama 25 menit. Jika belum ada Top 1, sistem membuat satu tindakan konkret. Pemulihan setelah aplikasi tertutup memulai eksekusi saat aplikasi kembali aktif, tanpa memberi kredit fokus untuk waktu offline. Beralih ke Minimum membatalkan perencanaan.
+- Form tugas menyimpan judul, deskripsi, kategori, deadline, durasi, energi, prioritas, subtask, dan bobot poin. Asisten lokal menawarkan konversi judul abstrak menjadi output terukur. Bobot mengatur pembagian poin dalam kelompok skor; total harian tetap maksimal 100.
+- Geser kanan menyelesaikan tugas dan menyediakan **Undo selama 5 detik**, termasuk pemulihan checklist, status, dan skor. Geser kiri membuka pengaturan status. Menunda atau melewati tugas memerlukan alasan.
+- Modul **VALORANT** ada di blok 11.45–13.00. Akses memerlukan Top 1 selesai atau satu sesi fokus pagi selesai, kuota satu match, dan tidak ada penalti kemarin. Izin notifikasi dan alarm presisi wajib tersedia sebelum kuota terpakai. Sistem memasang alarm 45 menit dan pengingat pukul 13.00; kegagalan pemasangan alarm mengembalikan kuota. Pengguna tetap wajib mengonfirmasi game sudah ditutup. Konfirmasi melewati pukul 13.00, termasuk sesi yang dibiarkan tanpa konfirmasi, mengunci akses keesokan hari kecuali konsekuensi hari itu dinonaktifkan oleh Adaptasi.
+
+Migrasi SQLite versi 2 menambahkan field tugas dan perlindungan hari, serta tabel `planning_sessions` dan `valorant_sessions`, tanpa menghapus data versi 1. Seluruh timer memakai timestamp persisten. MULA mencatat izin bermain dan konfirmasi pengguna; penguncian ini berlaku pada tombol akses dalam MULA, bukan pemblokiran proses game oleh Android.
+
 ## Jadwal dan penyesuaian
 
 Jadwal mengikuti blok yang diminta, termasuk buffer sebelum 07.00, jeda tanpa HP, syarat VALORANT, rutinitas Alshad, rotasi RUMA/Sidangode, dan ritual shutdown. Celah 16.00–17.00 tetap tersedia sebagai transisi karena tidak ada blok eksplisit pada permintaan awal.

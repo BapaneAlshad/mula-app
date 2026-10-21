@@ -23,6 +23,11 @@ class AppSnapshot {
     required this.history,
     required this.preferences,
     required this.date,
+    this.minimumTasks = const [],
+    this.planningSession,
+    this.valorantSession,
+    this.valorantGate = const {},
+    this.streak = 0,
   });
 
   final DbRow user;
@@ -34,4 +39,9 @@ class AppSnapshot {
   final List<DbRow> history;
   final Map<String, String> preferences;
   final String date;
+  final List<DbRow> minimumTasks;
+  final DbRow? planningSession;
+  final DbRow? valorantSession;
+  final DbRow valorantGate;
+  final int streak;
 }

@@ -53,6 +53,21 @@ void main() {
     notifier.nextDay();
     expect(container.read(circadianThemeProvider).sanctuary, isFalse);
   });
+
+  test('anxiety can calm a normal day without granting adaptation protection', () async {
+    final notifier = _ThemeTestController();
+    final container = ProviderContainer(overrides: [
+      appControllerProvider.overrideWith(() => notifier),
+      clockProvider.overrideWithValue(DateTime(2026, 10, 21, 9)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(appControllerProvider.future);
+    notifier.calmNormalDay();
+    expect(container.read(circadianThemeProvider).sanctuary, isTrue);
+    expect(container.read(appControllerProvider).requireValue.score.text('dayMode'), 'Normal');
+    notifier.nextDay();
+    expect(container.read(circadianThemeProvider).sanctuary, isFalse);
+  });
 }
 
 class _ThemeTestController extends AppController {
@@ -60,11 +75,12 @@ class _ThemeTestController extends AppController {
   Future<AppSnapshot> build() async => _snapshot('Minimum', '2026-10-21');
 
   void nextDay() => state = AsyncData(_snapshot('Normal', '2026-10-22'));
+  void calmNormalDay() => state = AsyncData(_snapshot('Normal', '2026-10-21'));
 
   AppSnapshot _snapshot(String mode, String date) => AppSnapshot(
     user: const {'name': 'Anggit'},
     templates: const [], tasks: const [], thoughts: const [], activeFocus: null,
     score: {'dayMode': mode}, history: const [],
-    preferences: const {'sanctuary': 'true'}, date: date,
+    preferences: const {'sanctuary': 'true', 'sanctuaryDate': '2026-10-21'}, date: date,
   );
 }

@@ -36,15 +36,14 @@ class MulaCard extends StatelessWidget {
   final EdgeInsets padding;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: padding,
-    decoration: BoxDecoration(
+  Widget build(BuildContext context) => Material(
       color: color ?? Theme.of(context).colorScheme.surfaceContainerLow,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .5)),
-    ),
-    child: child,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: .5)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(width: double.infinity, child: Padding(padding: padding, child: child)),
   );
 }
 
@@ -87,7 +86,7 @@ class EmptyState extends StatelessWidget {
 List<DbRow> readChecklist(DbRow task) {
   try {
     final value = jsonDecode(task.text('subtasksJson', '[]'));
-    if (value is List) return value.whereType<Map>().map((item) => Map<String, Object?>.from(item)).toList();
+    if (value is List) return value.whereType<Map<String, dynamic>>().map((item) => Map<String, Object?>.from(item)).toList();
   } on FormatException {
     return [];
   }

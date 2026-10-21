@@ -163,7 +163,9 @@ final circadianThemeProvider = Provider<CircadianThemeState>((ref) {
   return const CircadianThemeController().resolve(
     now,
     name: snapshot?.user.text('name', 'Anggit') ?? 'Anggit',
-    sanctuary: (snapshot?.score.text('dayMode', 'Normal') ?? 'Normal') != 'Normal',
+    sanctuary: (snapshot?.score.text('dayMode', 'Normal') ?? 'Normal') != 'Normal' ||
+        (snapshot?.preferences['sanctuary'] == 'true' &&
+            snapshot?.preferences['sanctuaryDate'] == snapshot?.date),
     wakeTime: snapshot?.user.text('wakeTime', '04:30') ?? '04:30',
     sleepTime: snapshot?.user.text('sleepTime', '22:00') ?? '22:00',
     workStartTime: snapshot?.user.text('workStartTime', '08:00') ?? '08:00',

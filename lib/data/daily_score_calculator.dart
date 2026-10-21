@@ -70,11 +70,14 @@ class DailyScoreCalculator {
     }
 
     final planned = <String, double>{for (final key in caps.keys) key: 0};
+    final plannedSeconds = <String, double>{for (final key in caps.keys) key: 0};
     final covered = <String, double>{for (final key in caps.keys) key: 0};
     for (final task in tasks) {
       final bucket = bucketForTask(task);
       final seconds = task.number('estimatedMinutes', 25) * 60.0;
-      planned[bucket] = planned[bucket]! + seconds;
+      final weight = _weight(task);
+      planned[bucket] = planned[bucket]! + weight;
+      plannedSeconds[bucket] = plannedSeconds[bucket]! + seconds;
       var fraction = 0.0;
       if (task.text('status') == 'Selesai') {
         fraction = 1;
@@ -88,14 +91,16 @@ class DailyScoreCalculator {
       final focused = _unionSeconds(taskIntervals[task.number('id')] ?? []);
       final completedCoverage = seconds * fraction;
       final coverage = completedCoverage > focused ? completedCoverage : focused;
-      covered[bucket] = covered[bucket]! + coverage.clamp(0, seconds);
+      covered[bucket] = covered[bucket]! + coverage.clamp(0, seconds) / seconds * weight;
     }
     final result = <String, int>{};
     for (final entry in caps.entries) {
       final baseline = planned[entry.key]!;
       final standalone = _unionSeconds(standaloneIntervals[entry.key] ?? []);
+      final standaloneCoverage = baseline == 0 ? 0.0 :
+          standalone / plannedSeconds[entry.key]! * baseline;
       result[entry.key] = baseline == 0 ? 0
-          : ((covered[entry.key]! + standalone) / baseline * entry.value)
+          : ((covered[entry.key]! + standaloneCoverage) / baseline * entry.value)
               .round().clamp(0, entry.value).toInt();
     }
     result['totalScore'] = result.values.fold<int>(0, (sum, score) => sum + score);
@@ -108,13 +113,12 @@ class DailyScoreCalculator {
     final result = <int, int>{};
     for (final entry in caps.entries) {
       final group = tasks.where((task) => bucketForTask(task) == entry.key).toList();
-      final minutes = group.fold<int>(0,
-          (sum, task) => sum + task.number('estimatedMinutes', 25));
+      final minutes = group.fold<double>(0, (sum, task) => sum + _weight(task));
       if (minutes == 0) continue;
       final remainders = <({int id, double remainder})>[];
       var assigned = 0;
       for (final task in group) {
-        final value = task.number('estimatedMinutes', 25) / minutes * entry.value;
+        final value = _weight(task) / minutes * entry.value;
         final points = value.floor();
         final id = task.number('id');
         result[id] = points;
@@ -132,6 +136,9 @@ class DailyScoreCalculator {
     }
     return result;
   }
+
+  static double _weight(DbRow task) =>
+      task.number('pointWeight', task.number('estimatedMinutes', 25)).toDouble();
 
   static List<DbRow> decodeChecklist(String json) {
     try {

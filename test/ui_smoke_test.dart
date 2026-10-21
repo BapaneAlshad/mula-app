@@ -36,14 +36,14 @@ void main() {
     final controller = _UiController();
     await tester.pumpWidget(_shell(controller));
     await tester.pumpAndSettle();
-    expect(find.text('Ritme hari ini'), findsOneWidget);
+    expect(find.text('SKOR HARI INI'), findsOneWidget);
 
     for (final destination in <String, String>{
       'Fokus': 'Satu hal.\nSepenuh hadir.',
       'Pikiran': 'Letakkan dulu.\nLepaskan sejenak.',
       'Progres': 'Tumbuh dengan\nritmemu sendiri.',
       'Pengaturan': 'Sistem yang\nmenemanimu.',
-      'Hari Ini': 'Ritme hari ini',
+      'Hari Ini': 'SKOR HARI INI',
     }.entries) {
       await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text(destination.key)));
       await tester.pumpAndSettle();

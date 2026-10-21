@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../application/app_controller.dart';
 import '../domain/app_snapshot.dart';
 import '../domain/focus_clock.dart';
+import '../features/tasks/presentation/task_card.dart';
 import 'widgets/shared.dart';
 
 class FocusPage extends ConsumerStatefulWidget {
@@ -36,10 +37,11 @@ class _FocusPageState extends ConsumerState<FocusPage> with PersistedActions<Foc
     final focusClock = startedAt == null ? null : FocusClock(startedAt: startedAt, plannedSeconds: planned);
     final elapsed = focusClock?.elapsedAt(now) ?? 0;
     final remaining = focusClock?.remainingAt(now) ?? planned;
-    final taskOptions = data.tasks.where((task) => !['Selesai', 'Dilewati'].contains(task.text('status'))).toList();
+    final availableTasks = data.score.text('dayMode') == 'Minimum' ? data.minimumTasks : data.tasks;
+    final taskOptions = availableTasks.where((task) => !['Selesai', 'Dilewati'].contains(task.text('status'))).toList();
     final preferenceTask = int.tryParse(data.preferences['focusTaskId'] ?? '0') ?? 0;
     final selectedTask = taskOptions.any((task) => task.number('id') == preferenceTask) ? preferenceTask : 0;
-    final activeTask = data.tasks.where((task) => task.number('id') == (session?.number('taskId', -1) ?? -1));
+    final activeTask = [...data.tasks, ...data.minimumTasks].where((task) => task.number('id') == (session?.number('taskId', -1) ?? -1));
     return ListView(padding: const EdgeInsets.fromLTRB(22, 16, 22, 28), children: [
       const PageTitle(title: 'Satu hal.\nSepenuh hadir.', subtitle: 'Beri ruang untuk tugas yang ada di depanmu.'),
       MulaCard(
@@ -83,7 +85,9 @@ class _FocusPageState extends ConsumerState<FocusPage> with PersistedActions<Foc
             ),
             const SizedBox(height: 20),
             SizedBox(width: double.infinity, child: FilledButton.icon(
-              onPressed: saving ? null : () => perform(() => actions.startFocus(taskId: selectedTask == 0 ? null : selectedTask, plannedSeconds: planned, mode: planned <= 300 ? 'Langkah kecil' : 'Deep Work')),
+              onPressed: saving ? null : () => selectedTask == 0
+                  ? perform(() => actions.startFocus(plannedSeconds: planned, mode: planned <= 300 ? 'Langkah kecil' : 'Deep Work'))
+                  : startTaskFocus(context, ref, taskOptions.singleWhere((task) => task.number('id') == selectedTask), plannedSeconds: planned),
               icon: const Icon(Icons.play_arrow_rounded),
               label: const Text('Mulai fokus'),
             )),

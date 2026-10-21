@@ -22,6 +22,7 @@ class MulaApp extends ConsumerStatefulWidget {
 }
 
 class _MulaAppState extends ConsumerState<MulaApp> with WidgetsBindingObserver {
+  final _navigatorKey = GlobalKey<NavigatorState>();
   @override
   void initState() {
     super.initState();
@@ -49,9 +50,16 @@ class _MulaAppState extends ConsumerState<MulaApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(planningHandoffProvider, (previous, next) {
+      if (previous == next) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _navigatorKey.currentState?.popUntil((route) => route.isFirst);
+      });
+    });
     final circadian = ref.watch(circadianThemeProvider);
     final app = ref.watch(appControllerProvider);
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'MULA',
       debugShowCheckedModeBanner: false,
       theme: circadian.theme,

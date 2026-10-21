@@ -26,7 +26,7 @@ class AppDatabase {
     return _factory.openDatabase(
       databasePath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         singleInstance: _singleInstance,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
@@ -36,6 +36,10 @@ class AppDatabase {
           for (final statement in _schema) {
             await database.execute(statement);
           }
+          await _upgradeToPhaseTwo(database);
+        },
+        onUpgrade: (database, oldVersion, newVersion) async {
+          if (oldVersion < 2) await _upgradeToPhaseTwo(database);
         },
       ),
     );
@@ -45,6 +49,48 @@ class AppDatabase {
     final opening = _opening;
     _opening = null;
     if (opening != null) await (await opening).close();
+  }
+
+  static Future<void> _upgradeToPhaseTwo(DatabaseExecutor database) async {
+    for (final statement in <String>[
+      'ALTER TABLE daily_tasks ADD COLUMN deadline TEXT',
+      'ALTER TABLE daily_tasks ADD COLUMN pointWeight INTEGER CHECK (pointWeight BETWEEN 1 AND 100)',
+      'ALTER TABLE daily_tasks ADD COLUMN minimumKey TEXT',
+      'ALTER TABLE daily_tasks ADD COLUMN startedAt TEXT',
+      'ALTER TABLE daily_tasks ADD COLUMN revision INTEGER NOT NULL DEFAULT 0',
+      'ALTER TABLE daily_scores ADD COLUMN consequencesDisabled INTEGER NOT NULL DEFAULT 0 CHECK (consequencesDisabled IN (0,1))',
+      'ALTER TABLE daily_scores ADD COLUMN streakProtected INTEGER NOT NULL DEFAULT 0 CHECK (streakProtected IN (0,1))',
+      '''UPDATE daily_tasks SET priority = 'Reguler' WHERE priority != 'Reguler'
+        AND id NOT IN (SELECT MIN(id) FROM daily_tasks
+          WHERE priority != 'Reguler' GROUP BY userId, date, priority)''',
+      '''CREATE UNIQUE INDEX one_top_priority_per_day ON daily_tasks(userId, date, priority)
+        WHERE priority != 'Reguler' AND minimumKey IS NULL''',
+      'CREATE UNIQUE INDEX one_minimum_task_per_day ON daily_tasks(userId, date, minimumKey)',
+      '''CREATE TABLE planning_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date TEXT NOT NULL,
+        startedAt TEXT NOT NULL,
+        deadlineAt TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'Berjalan'
+          CHECK (status IN ('Berjalan','Siap Top 1','Dieksekusi','Dibatalkan')),
+        targetTaskId INTEGER REFERENCES daily_tasks(id) ON DELETE SET NULL,
+        UNIQUE(userId, date)
+      )''',
+      '''CREATE TABLE valorant_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date TEXT NOT NULL,
+        startedAt TEXT NOT NULL,
+        alarmAt TEXT NOT NULL,
+        cutoffAt TEXT NOT NULL,
+        confirmedAt TEXT,
+        status TEXT NOT NULL DEFAULT 'Berjalan' CHECK (status IN ('Berjalan','Ditutup')),
+        UNIQUE(userId, date)
+      )''',
+    ]) {
+      await database.execute(statement);
+    }
   }
 
   static const _schema = <String>[
