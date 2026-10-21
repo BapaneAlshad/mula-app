@@ -18,7 +18,15 @@ class AppDatabase {
   final bool _singleInstance;
   Future<Database>? _opening;
 
-  Future<Database> get database => _opening ??= _open();
+  Future<Database> get database async {
+    final opening = _opening ??= _open();
+    try {
+      return await opening;
+    } catch (_) {
+      if (identical(_opening, opening)) _opening = null;
+      rethrow;
+    }
+  }
 
   Future<Database> _open() async {
     final databasePath = _databasePath ??
@@ -30,7 +38,8 @@ class AppDatabase {
         singleInstance: _singleInstance,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
-          await database.execute('PRAGMA busy_timeout = 5000');
+          // Android execSQL rejects PRAGMAs that return a result row.
+          await database.rawQuery('PRAGMA busy_timeout = 5000');
         },
         onCreate: (database, version) async {
           for (final statement in _schema) {
