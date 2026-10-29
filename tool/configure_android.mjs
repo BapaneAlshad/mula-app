@@ -16,6 +16,24 @@ export function configureGradle(source, kotlin) {
   };
 
   if (kotlin) {
+    result = 'val mulaSigningProperties = java.util.Properties().apply {\n' +
+      '    val propertiesFile = rootProject.file("key.properties")\n' +
+      '    if (propertiesFile.exists()) propertiesFile.inputStream().use { load(it) }\n' +
+      '}\n\n' + result;
+    // Gradle requires the plugins block before ordinary declarations.
+    result = result.replace(/^(val mulaSigningProperties[\s\S]*?\}\n\n)([\s\S]*?plugins\s*\{[^}]*\})/,
+      '$2\n\n$1');
+    required(/android\s*\{/, 'android {\n' +
+      '    signingConfigs {\n' +
+      '        if (mulaSigningProperties.isNotEmpty()) create("mulaRelease") {\n' +
+      '            keyAlias = mulaSigningProperties.getProperty("keyAlias")\n' +
+      '            keyPassword = mulaSigningProperties.getProperty("keyPassword")\n' +
+      '            storeFile = file(mulaSigningProperties.getProperty("storeFile"))\n' +
+      '            storePassword = mulaSigningProperties.getProperty("storePassword")\n' +
+      '            storeType = mulaSigningProperties.getProperty("storeType", "PKCS12")\n' +
+      '        }\n    }', 'android signing configs');
+    required(/signingConfig\s*=\s*signingConfigs\.getByName\("debug"\)/,
+      'signingConfig = if (mulaSigningProperties.isNotEmpty()) signingConfigs.getByName("mulaRelease") else signingConfigs.getByName("debug")', 'release signing');
     required(/^([ \t]*)compileSdk\s*=.*$/m,
       '$1compileSdk = maxOf(36, flutter.compileSdkVersion)', 'compileSdk');
     required(/^([ \t]*)minSdk\s*=.*$/m,
@@ -38,6 +56,22 @@ export function configureGradle(source, kotlin) {
       '    implementation("androidx.appcompat:appcompat:1.7.1")\n' +
       '}\n';
   } else {
+    result = result.replace(/(plugins\s*\{[^}]*\})/, '$1\n' +
+      'def mulaSigningProperties = new Properties()\n' +
+      'def mulaSigningFile = rootProject.file("key.properties")\n' +
+      'if (mulaSigningFile.exists()) mulaSigningFile.withInputStream { mulaSigningProperties.load(it) }\n');
+    required(/android\s*\{/, 'android {\n' +
+      '    signingConfigs {\n' +
+      '        if (!mulaSigningProperties.isEmpty()) {\n' +
+      '            mulaRelease {\n' +
+      '                keyAlias mulaSigningProperties.getProperty("keyAlias")\n' +
+      '                keyPassword mulaSigningProperties.getProperty("keyPassword")\n' +
+      '                storeFile file(mulaSigningProperties.getProperty("storeFile"))\n' +
+      '                storePassword mulaSigningProperties.getProperty("storePassword")\n' +
+      '                storeType mulaSigningProperties.getProperty("storeType", "PKCS12")\n' +
+      '            }\n        }\n    }', 'android signing configs');
+    required(/signingConfig\s+(?:=\s*)?signingConfigs\.debug/,
+      'signingConfig mulaSigningProperties.isEmpty() ? signingConfigs.debug : signingConfigs.mulaRelease', 'release signing');
     required(/^([ \t]*)compileSdk(?:Version)?\s*(?:=\s*)?.*$/m,
       '$1compileSdk Math.max(36, flutter.compileSdkVersion)', 'compileSdk');
     required(/^([ \t]*)minSdk(?:Version)?\s*(?:=\s*)?.*$/m,

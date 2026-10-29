@@ -16,7 +16,7 @@ jobs:
   build:
     name: Analyze, test, and build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -55,6 +55,14 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get --enforce-lockfile
 
+      - name: Recover permanent signing identity when configured
+        id: signing
+        env:
+          MULA_KEYSTORE_BASE64: ${{ secrets.MULA_KEYSTORE_BASE64 }}
+          MULA_STORE_PASSWORD: ${{ secrets.MULA_STORE_PASSWORD }}
+          MULA_KEY_PASSWORD: ${{ secrets.MULA_KEY_PASSWORD }}
+        run: node tool/prepare_signing.mjs
+
       - name: Test Android release configuration
         run: node --test tool/configure_android.test.mjs
 
@@ -66,6 +74,13 @@ jobs:
 
       - name: Build release APK
         run: flutter build apk --release --no-tree-shake-icons
+
+      - name: Verify APK signing certificate
+        env:
+          MULA_PERMANENT_SIGNING: ${{ steps.signing.outputs.permanent }}
+        run: |
+          export MULA_APKSIGNER="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          node tool/verify_apk_signing.mjs
 
       - name: Enable emulator hardware acceleration
         run: |
@@ -82,21 +97,36 @@ jobs:
           profile: pixel_2
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: node tool/android_release_smoke.mjs build/app/outputs/flutter-apk/app-release.apk
+          script: |
+            MULA_SMOKE_OUTPUT=build/smoke-api29 node tool/android_release_smoke.mjs build/app/outputs/flutter-apk/app-release.apk
+            MULA_SMOKE_OUTPUT=build/smoke-api29 node tool/android_alarm_smoke.mjs
+
+      - name: Verify startup and locked-screen alarm on Android 15
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            MULA_SMOKE_OUTPUT=build/smoke-api35 node tool/android_release_smoke.mjs build/app/outputs/flutter-apk/app-release.apk
+            MULA_SMOKE_OUTPUT=build/smoke-api35 node tool/android_alarm_smoke.mjs
 
       - name: Upload Android startup diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MULA-Android-Startup-Diagnostics
-          path: build/smoke/
+          path: build/smoke*/
           if-no-files-found: ignore
           retention-days: 14
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: MULA-Android-APK
+          name: ${{ steps.signing.outputs.permanent == 'true' && 'MULA-Android-APK' || 'MULA-Android-Preview-APK' }}
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14

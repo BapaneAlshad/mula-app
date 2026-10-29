@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/app_snapshot.dart';
+import '../features/wellbeing/presentation/history_panel.dart';
 import 'widgets/mula_seed.dart';
 import 'widgets/shared.dart';
 
@@ -74,6 +75,8 @@ class _ProgressPageState extends ConsumerState<ProgressPage> with PersistedActio
             )));
           }).toList())),
         ])),
+      const SizedBox(height: 24),
+      HistoryPanel(snapshot: data),
       const SizedBox(height: 24),
       Row(children: [
         Expanded(child: Text('Singgah & refleksi', style: Theme.of(context).textTheme.titleLarge)),

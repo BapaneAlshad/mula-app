@@ -4,9 +4,11 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { exerciseWellbeing } from './android_wellbeing_smoke.mjs';
+import { exerciseBackup } from './android_backup_smoke.mjs';
 
 const packageName = 'com.anggit.mula.mula';
-const output = path.resolve('build/smoke');
+const output = path.resolve(process.env.MULA_SMOKE_OUTPUT ?? 'build/smoke');
 const appPids = new Set();
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 let sequence = 0;
@@ -188,6 +190,10 @@ async function run() {
   await selectTab('Hari Ini');
   await waitFor('today-after-restart', (nodes) => includesLabel(nodes, 'SKOR HARI INI'));
   screenshot('today-after-restart');
+  await exerciseWellbeing({ tap, findControl, waitFor, includesLabel, selectTab, scroll, screenshot,
+    forceRestart: async () => { adb(['shell', 'am', 'force-stop', packageName]); await launch(); },
+  });
+  await exerciseBackup({ snapshot, findControl, tap, waitFor, selectTab, scroll, screenshot, adb, delay, launch });
   fs.writeFileSync(path.join(output, 'result.txt'), 'PASS: release onboarding, SQLite startup, native preferences read/write, navigation, and process restart.\n');
   console.log('Release APK smoke check passed: onboarding, preferences write/read, and persisted restart.');
 }

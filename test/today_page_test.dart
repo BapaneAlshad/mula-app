@@ -4,6 +4,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mula/application/app_controller.dart';
 import 'package:mula/domain/app_snapshot.dart';
 import 'package:mula/features/today/presentation/today_page.dart';
+import 'package:mula/features/wellbeing/application/wellbeing_providers.dart';
+import 'package:mula/features/wellbeing/presentation/anxiety_session_page.dart';
 
 void main() {
   testWidgets('quick actions work at narrow phone width', (tester) async {
@@ -24,6 +26,11 @@ void main() {
     await tester.tap(find.text('Saya sedang cemas'));
     await tester.pumpAndSettle();
     expect(controller.sanctuaryReason, 'Cemas');
+    expect(find.byType(AnxietySessionPage), findsOneWidget);
+    expect(find.text('Mulai sesi tenang'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(AnxietySessionPage), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -120,6 +127,7 @@ Widget _page(_TodayController controller, {DateTime? now}) => ProviderScope(
       overrides: [
         appControllerProvider.overrideWith(() => controller),
         clockProvider.overrideWithValue(now ?? DateTime(2026, 10, 21, 9)),
+        anxietySessionProvider.overrideWith((ref) async => null),
       ],
       child: Consumer(builder: (context, ref, child) {
         final snapshot = ref.watch(appControllerProvider).valueOrNull;

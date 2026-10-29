@@ -28,7 +28,7 @@ flutter test
 flutter build apk --release --no-tree-shake-icons
 ```
 
-Artifact disimpan selama 14 hari. `flutter create` membuat konfigurasi tanda tangan debug untuk build release ini, sehingga APK ditujukan untuk instalasi pribadi. Rilis distribusi permanen memerlukan keystore milik pemilik aplikasi agar pembaruan APK selalu menggunakan identitas tanda tangan yang sama.
+Artifact disimpan selama 14 hari. Build dengan tiga secret signing memakai identitas permanen dan memverifikasi sertifikat APK terhadap `android/app/mula-release-cert.pem`. Jika secret belum dipasang, hasil diberi nama **MULA-Android-Preview-APK**, dengan kunci debug sementara; jangan menganggap preview dapat memperbarui instalasi lama tanpa uninstall.
 
 ## Isi Fase 1
 
@@ -66,7 +66,7 @@ Skor harian memiliki batas 100: Pagi 20, Kerja 35, Kesehatan/Keluarga 25, dan Si
 
 ## Data, pengingat, dan penguncian
 
-Seluruh data utama disimpan di SQLite dalam penyimpanan aplikasi. Preferensi sederhana memakai SharedPreferences. Aplikasi tidak memerlukan akun cloud atau koneksi internet setelah terpasang. Menghapus data aplikasi atau menghapus instalasi juga menghapus database lokal; ekspor dan sinkronisasi belum termasuk Fase 1.
+Seluruh data utama disimpan di SQLite dalam penyimpanan aplikasi. Preferensi sederhana memakai SharedPreferences sebagai salinan tambahan. Aplikasi tidak memerlukan akun cloud atau koneksi internet setelah terpasang. Menghapus data aplikasi atau menghapus instalasi juga menghapus database lokal. Versi 1.1 menyediakan ekspor dan pemulihan melalui berkas pilihan pengguna; sinkronisasi cloud belum tersedia.
 
 Manifest menyertakan seluruh izin yang diminta, receiver notifikasi dan reboot, layanan AlarmManager, serta ikon notifikasi yang dipertahankan pada build release. Notifikasi Android 13+ tetap mengikuti izin pengguna. Jika alarm presisi tidak tersedia, aplikasi perlu memakai pengingat tidak presisi; izin yang tercantum pada manifest tidak menggantikan keputusan pengguna dan pengaturan Android. Pembatasan baterai dari produsen HP atau force stop dapat menunda atau membatalkan pengingat sampai aplikasi dibuka kembali. Pengingat saat layar terkunci perlu diperiksa pada perangkat Android yang digunakan Anggit.
 
@@ -97,3 +97,24 @@ Versi API dipilih dari dokumentasi paket resmi: [Riverpod 2.6.1](https://pub.dev
 MULA mempertahankan enam kelas Kotlin tersebut lewat `android/app/proguard-rules.pro`, yang dipasang eksplisit ke konfigurasi release oleh script pembuat Android. SQLite dibuka terlebih dahulu. Pengaturan `busy_timeout` memakai `rawQuery`, karena PRAGMA ini mengembalikan baris hasil dan ditolak oleh `execSQL` Android. Salinan preferensi di SharedPreferences bersifat tambahan; bila plugin gagal, perubahan tetap tersimpan di SQLite dan aplikasi tetap dapat dibuka. Perbaikan ini tidak menghapus atau mengganti database pengguna.
 
 Selain tes Dart dan konfigurasi Gradle, workflow memasang APK release yang akan dibagikan pada emulator Android di GitHub Actions. Pemeriksaan menjalankan onboarding, navigasi, penulisan preferensi, serta membuka ulang aplikasi, dan menolak error JNI maupun kegagalan salinan preferensi di logcat. Hasil screenshot, XML layar, dan logcat tersedia sebagai artifact diagnostik. Flutter SDK dan emulator tetap hanya berjalan di cloud.
+
+## Kesiapan pemakaian harian 1.1
+
+- **Cadangan:** Pengaturan → Simpan cadangan / Pulihkan cadangan memakai pemilih berkas Android, tanpa izin penyimpanan luas. Berkas JSON mencakup seluruh sepuluh tabel SQLite dan dibatasi 8 MB. Berkas mengandung catatan pribadi dan belum dienkripsi; simpan di tempat pribadi. Bila penguncian ruang pikiran aktif, akses cadangan meminta autentikasi perangkat. Akhiri sesi fokus, perencanaan, game, atau sesi tenang sebelum mencadangkan/memulihkan. Pemulihan menampilkan ringkasan, meminta konfirmasi, mewajibkan penyimpanan cadangan pengaman, lalu mengganti data dalam satu transaksi. Format, kolom lengkap, nilai, dan relasi divalidasi; perubahan data selama pemilih berkas terbuka membatalkan penggantian. Status uji alarm dan autentikasi perangkat lama tidak dipindahkan.
+- **Uji alarm:** Pengaturan → Periksa alarm di HP menampilkan izin notifikasi, alarm presisi, kanal uji, kondisi baterai, dan Jangan Ganggu. Tombol uji memasang notifikasi alarm satu menit kemudian. Kunci layar, tunggu, lalu catat terdengar/tidak terdengar. Waktu habis tidak otomatis dianggap berhasil. CI juga memeriksa penerimaan notifikasi native saat layar emulator terkunci pada Android 10 dan Android 15. Bukti emulator tidak menggantikan pengujian suara di HP Anggit.
+- **Sesi tenang:** Tombol cemas membuka napas terpandu dua menit, pilihan grounding 5–4–3–2–1, dan penilaian kondisi sebelum/sesudah. Timestamp, tahap, dan checklist tersimpan di SQLite sehingga dapat dilanjutkan setelah aplikasi tertutup. Sesi baru selesai ketika pengguna menyimpan kondisi akhirnya.
+- **Riwayat:** Tab Progres menyediakan kalender hari tersimpan, detail tugas/refleksi, serta rangkuman tujuh hari dengan durasi fokus aktual yang tidak menggandakan sesi bertumpuk. Membuka hari kosong tidak membuat data historis baru.
+- **Jadwal:** Pengaturan → Atur jadwal rutin mengubah judul, jam, hari, kategori, checklist, dan keaktifan, atau menambah blok baru. Jam bertabrakan ditolak. Perubahan berlaku besok; snapshot jam/judul pada tugas menjaga progres dan skor hari yang telah dibuat. Migrasi SQLite versi 3 mempertahankan data versi 1/2.
+- **Ketegasan:** Lembut hanya mengingatkan saat blok dimulai; Seimbang menambah pengingat awal dua menit; Tegas lima menit. Pergantian tingkat memperbarui jadwal alarm. Alarm jadwal dipasang sebagai tanggal konkret hingga 14 hari ke depan dan diperbarui saat aplikasi dibuka/dilanjutkan atau berganti hari. Batas 450 notifikasi mencegah melewati kapasitas perangkat; jika terlalu padat, kurangi blok atau pilih Lembut. Mode Minimum meniadakan pengingat jadwal padat sampai kembali ke Normal atau hari berikutnya diproses.
+
+## Mengaktifkan tanda tangan permanen
+
+Keystore **bukan** berkas source. `.signing/`, `*.p12`, dan `android/key.properties` harus tetap diabaikan Git. `node tool/create_signing_key.mjs` membuat identitas PKCS12 RSA 3072-bit menggunakan OpenSSL yang sudah tersedia (Windows memakai OpenSSL bawaan Git), tanpa Flutter/Android/Java lokal. Script menolak menimpa identitas yang sudah ada. Folder `.signing/` berisi keystore terenkripsi dan kredensial pemulihan; buat salinan aman terpisah. Hanya sertifikat publik masuk repository.
+
+Setelah GitHub CLI resmi tersedia dan akun pemilik repo sudah login, jalankan:
+
+```sh
+node tool/upload_signing_secrets.mjs
+```
+
+Script memasang `MULA_KEYSTORE_BASE64`, `MULA_STORE_PASSWORD`, dan `MULA_KEY_PASSWORD` ke Actions secrets repo `BapaneAlshad/mula-app`, tanpa menampilkan nilainya. Script menolak mengganti secret signing yang sudah ada. Workflow mengisi konfigurasi Gradle dari secret; setengah konfigurasi atau sertifikat yang tidak cocok menggagalkan distribusi. Kunci debug dari APK lama tidak dapat dipulihkan dari sertifikat publik. Keystore permanen baru menjamin konsistensi **build berikutnya yang memakai keystore tersebut**, bukan kompatibilitas tanda tangan dengan APK debug lama.

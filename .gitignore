@@ -29,6 +29,8 @@ android/app/src/profile/
 android/app/src/main/java/io/
 *.jks
 *.keystore
+*.p12
+.signing/
 
 # IDE and operating-system files.
 .idea/

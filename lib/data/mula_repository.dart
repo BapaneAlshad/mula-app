@@ -755,7 +755,9 @@ class MulaRepository {
 
   Future<DbRow> _task(DatabaseExecutor database, int id) async {
     final rows = await database.rawQuery('''
-      SELECT t.*, s.startTime, s.endTime, s.title AS templateTitle
+      SELECT t.*, COALESCE(t.scheduleStartTime, s.startTime) AS startTime,
+        COALESCE(t.scheduleEndTime, s.endTime) AS endTime,
+        COALESCE(t.scheduleTitle, s.title) AS templateTitle
       FROM daily_tasks t LEFT JOIN schedule_templates s ON s.id = t.sourceScheduleId
       WHERE t.id = ? AND t.userId = ?''', [id, _userId]);
     if (rows.isEmpty) throw StateError('Tugas tidak ditemukan.');
@@ -764,11 +766,13 @@ class MulaRepository {
 
   Future<List<DbRow>> _tasks(DatabaseExecutor database, String date) =>
       database.rawQuery('''
-        SELECT t.*, s.startTime, s.endTime, s.title AS templateTitle, s.sortOrder
+        SELECT t.*, COALESCE(t.scheduleStartTime, s.startTime) AS startTime,
+          COALESCE(t.scheduleEndTime, s.endTime) AS endTime,
+          COALESCE(t.scheduleTitle, s.title) AS templateTitle, s.sortOrder
         FROM daily_tasks t LEFT JOIN schedule_templates s ON s.id = t.sourceScheduleId
         WHERE t.userId = ? AND t.date = ? AND t.minimumKey IS NULL
         ORDER BY CASE WHEN s.sortOrder IS NULL THEN 1 ELSE 0 END,
-          s.sortOrder, t.id''', [_userId, date]);
+          COALESCE(t.scheduleStartTime, s.startTime), s.sortOrder, t.id''', [_userId, date]);
 
   Future<List<DbRow>> _minimumTasks(DatabaseExecutor database, String date) async {
     final rows = await database.query('daily_tasks',
@@ -788,7 +792,8 @@ class MulaRepository {
         where: 'userId = ? AND date = ? AND minimumKey IS NULL',
         whereArgs: [_userId, date], limit: 1);
     final templates = await database.query('schedule_templates',
-        where: 'userId = ? AND isActive = 1', whereArgs: [_userId], orderBy: 'sortOrder');
+        where: 'userId = ? AND isActive = 1 AND effectiveFrom <= ?',
+        whereArgs: [_userId, date], orderBy: 'sortOrder');
     for (final template in templates) {
       final days = jsonDecode(template.text('daysOfWeek')) as List;
       if (!days.contains(day.weekday)) continue;
@@ -816,6 +821,8 @@ class MulaRepository {
         'estimatedMinutes': minutes > 0 ? minutes : minutes + 1440,
         'energyLevel': {'09:30', '13:00', '20:45'}.contains(start) ? 'Tinggi' : 'Sedang',
         'sourceScheduleId': template.number('id'),
+        'scheduleStartTime': start, 'scheduleEndTime': end,
+        'scheduleTitle': baseTitle,
         'subtasksJson': template.text('checklistJson'),
       }, conflictAlgorithm: ConflictAlgorithm.ignore);
     }

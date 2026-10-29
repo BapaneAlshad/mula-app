@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/app_snapshot.dart';
 import '../theme/circadian_theme.dart';
 import 'widgets/shared.dart';
+import 'backup_panel.dart';
+import 'alarm_diagnostics_panel.dart';
+import 'schedule_editor_page.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key, required this.snapshot});
@@ -71,6 +74,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> with PersistedActio
           child: Text(data.preferences['reminderStatus']!, style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12, height: 1.5)),
         ),
       ])),
+      const SizedBox(height: 26),
+      MulaCard(child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(Icons.calendar_month_outlined, color: colors.primary),
+        title: const Text('Atur jadwal rutin'),
+        subtitle: const Text('Jam, hari, checklist, dan blok aktif. Perubahan mulai besok.'),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const ScheduleEditorPage())),
+      )),
+      const SizedBox(height: 18),
+      const AlarmDiagnosticsPanel(),
+      const SizedBox(height: 18),
+      BackupPanel(snapshot: data),
       const SizedBox(height: 26),
       Text('Suasana ruangmu', style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: 14),
@@ -186,7 +202,7 @@ class _ProfileDialogState extends State<_ProfileDialog> {
       ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.wb_sunny_outlined), title: const Text('Jam bangun'), trailing: Text(_format(_wake)), onTap: () => _chooseTime(true)),
       ListTile(contentPadding: EdgeInsets.zero, leading: const Icon(Icons.bedtime_outlined), title: const Text('Jam tidur'), trailing: Text(_format(_sleep)), onTap: () => _chooseTime(false)),
       const SizedBox(height: 12),
-      DropdownButtonFormField<String>(initialValue: _strictness, isExpanded: true, decoration: const InputDecoration(labelText: 'Tingkat ketegasan'), items: ['Lembut', 'Seimbang', 'Tegas'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(), onChanged: (value) => setState(() => _strictness = value ?? _strictness)),
+      DropdownButtonFormField<String>(initialValue: _strictness, isExpanded: true, decoration: const InputDecoration(labelText: 'Tingkat ketegasan', helperText: 'Pengingat awal: Lembut 0, Seimbang 2, Tegas 5 menit.', helperMaxLines: 2), items: ['Lembut', 'Seimbang', 'Tegas'].map((value) => DropdownMenuItem(value: value, child: Text(value))).toList(), onChanged: (value) => setState(() => _strictness = value ?? _strictness)),
     ])))),
     actions: [
       TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),

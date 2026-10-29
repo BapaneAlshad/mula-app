@@ -5,11 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/local/app_database.dart';
 import '../data/mula_repository.dart';
+import '../data/schedule_repository.dart';
 import '../domain/app_snapshot.dart';
 import '../domain/focus_clock.dart';
 import '../services/preference_mirror_service.dart';
 import '../services/privacy_service.dart';
 import '../services/reminder_service.dart';
+import '../services/backup_service.dart';
+import '../services/alarm_diagnostics_service.dart';
+import '../features/wellbeing/application/wellbeing_providers.dart';
 
 final databaseProvider = Provider<AppDatabase>((ref) {
   final database = AppDatabase();
@@ -24,6 +28,9 @@ final repositoryProvider = Provider<MulaRepository>((ref) => MulaRepository(
 final reminderServiceProvider = Provider<ReminderService>((ref) => ReminderService());
 final privacyServiceProvider = Provider<PrivacyService>((ref) => PrivacyService());
 final preferenceMirrorProvider = Provider<PreferenceMirrorService>((ref) => PreferenceMirrorService());
+final backupServiceProvider = Provider<BackupService>((ref) => BackupService(
+  ref.watch(databaseProvider), now: ref.watch(appNowProvider),
+));
 final thoughtsUnlockedProvider = StateProvider<bool>((ref) => false);
 final planningHandoffProvider = StateProvider<int>((ref) => 0);
 
@@ -73,7 +80,8 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     try {
       await _reminders.initialize();
       if (snapshot.preferences['reminders'] == 'true' && snapshot.score.text('dayMode') != 'Minimum') {
-        await _reminders.scheduleTemplates(snapshot.templates);
+        await _reminders.scheduleTemplates(snapshot.templates,
+          strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks);
       } else if (snapshot.score.text('dayMode') == 'Minimum') {
         await _reminders.cancelSchedule();
       }
@@ -202,10 +210,58 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     required String sleepTime,
     required String strictnessLevel,
     required bool onboardingCompleted,
-  }) => _mutate(() => _repository.saveUser(
+  }) => _mutate(() async {
+    await _repository.saveUser(
     name: name, wakeTime: wakeTime, sleepTime: sleepTime,
     strictnessLevel: strictnessLevel, onboardingCompleted: onboardingCompleted,
-  ));
+    );
+    await _restoreReminders(await _repository.loadDay(_now()));
+  });
+
+  Future<void> _authenticateBackup() async {
+    if (state.valueOrNull?.preferences['privacyLock'] == 'true' &&
+        !await ref.read(privacyServiceProvider).authenticate()) {
+      throw StateError('Verifikasi perangkat diperlukan untuk mengakses cadangan pribadi.');
+    }
+  }
+
+  Future<bool> exportBackup() => _mutateValue(() async {
+    await _authenticateBackup();
+    return ref.read(backupServiceProvider).exportBackup();
+  });
+
+  Future<BackupPreview?> inspectBackup() => _mutateValue(() async {
+    await _authenticateBackup();
+    return ref.read(backupServiceProvider).inspectBackup();
+  });
+
+  Future<void> restoreBackup(BackupPreview preview) => _mutate(() async {
+    await _authenticateBackup();
+    await ref.read(backupServiceProvider).restoreBackup(preview);
+    ref.read(thoughtsUnlockedProvider.notifier).state = false;
+    ref.invalidate(anxietySessionProvider);
+    ref.invalidate(alarmDiagnosticsProvider);
+    try {
+      await _reminders.cancelFocus();
+      await _reminders.cancelPlanning();
+      await _reminders.cancelValorant();
+      await _reminders.cancelSchedule();
+      await ref.read(alarmDiagnosticsPlatformProvider).cancelTest();
+    } catch (error) {
+      await _repository.savePreference('reminderStatus', 'Data dipulihkan. Periksa alarm perangkat: $error');
+    }
+    await _restoreReminders(await _repository.loadDay(_now()));
+  });
+
+  Future<void> saveSchedule({int? id, required String title, required String startTime,
+    required String endTime, required String category, required List<int> days,
+    required bool active, required List<String> checklist}) => _mutate(() async {
+      await ScheduleRepository(ref.read(databaseProvider), now: _now).save(
+        id: id, title: title, startTime: startTime, endTime: endTime,
+        category: category, days: days, active: active, checklist: checklist,
+      );
+      await _restoreReminders(await _repository.loadDay(_now()));
+    });
 
   Future<void> setTaskStatus(int id, String status, {String? reason}) =>
       _mutate(() => _repository.setTaskStatus(id, status, reason: reason));
@@ -346,7 +402,8 @@ class AppController extends AsyncNotifier<AppSnapshot> {
       await _reminders.cancelPlanning();
     } else if (state.valueOrNull?.preferences['reminders'] == 'true') {
       final snapshot = await _repository.loadDay(_now());
-      await _reminders.scheduleTemplates(snapshot.templates);
+      await _reminders.scheduleTemplates(snapshot.templates,
+        strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks);
     }
   });
 
@@ -429,7 +486,8 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     }
     final snapshot = await _repository.loadDay(_now());
     if (snapshot.score.text('dayMode') != 'Minimum') {
-      await _reminders.scheduleTemplates(snapshot.templates);
+      await _reminders.scheduleTemplates(snapshot.templates,
+        strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks);
     }
     await _writePreference('reminders', 'true');
   });

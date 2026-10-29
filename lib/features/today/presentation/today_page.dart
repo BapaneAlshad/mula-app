@@ -8,6 +8,7 @@ import '../../../ui/widgets/mula_seed.dart';
 import '../../../ui/widgets/shared.dart';
 import '../../tasks/presentation/task_card.dart';
 import '../../tasks/presentation/task_editor.dart';
+import '../../wellbeing/presentation/anxiety_session_page.dart';
 
 /// Today's rhythm is backed by persisted tasks, sessions, and daily scores.
 class TodayPage extends ConsumerStatefulWidget {
@@ -167,7 +168,12 @@ class _TodayPageState extends ConsumerState<TodayPage>
   DbRow? _template(DbRow task) {
     for (final template in data.templates) {
       if (template.number('id') == task.number('sourceScheduleId', -1)) {
-        return template;
+        return {
+          ...template,
+          if (task.text('startTime').isNotEmpty) 'startTime': task.text('startTime'),
+          if (task.text('endTime').isNotEmpty) 'endTime': task.text('endTime'),
+          if (task.text('templateTitle').isNotEmpty) 'title': task.text('templateTitle'),
+        };
       }
     }
     return null;
@@ -347,8 +353,7 @@ class _TodayPageState extends ConsumerState<TodayPage>
                 onPressed: saving
                     ? null
                     : () => perform(
-                          () => actions.enterSanctuary('Cemas'),
-                          success: 'Ruang tenang aktif. Tarik napas perlahan.',
+                          () => showAnxietySession(context, ref),
                         ),
               ),
               _QuickAction(

@@ -61,6 +61,10 @@ for (const [language, template, kotlin] of [
     assert.match(release,
       /proguardFiles\(?\s*getDefaultProguardFile\("proguard-android-optimize\.txt"\), "proguard-rules\.pro"\)?/);
     assert.match(release, /signingConfig/);
+    assert.match(release, /mulaRelease/);
+    assert.match(configured, /key\.properties/);
+    assert.match(configured, /PKCS12/);
+    assert.ok(configured.indexOf('plugins') < configured.indexOf('mulaSigningProperties'));
     assert.doesNotMatch(configured, /(?:isMinifyEnabled|minifyEnabled)\s*(?:=\s*)?false/);
     assert.doesNotMatch(configured, /dontoptimize|dontobfuscate|dontshrink/);
   });

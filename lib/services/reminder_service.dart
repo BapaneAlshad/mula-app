@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:ui';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
@@ -12,6 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../data/local/app_database.dart';
 import '../data/mula_repository.dart';
 import '../domain/app_snapshot.dart';
+import 'schedule_reminder_planner.dart';
 
 /// Runs in a separate engine: the database, not an in-memory timer, owns a session.
 @pragma('vm:entry-point')
@@ -121,35 +121,25 @@ class ReminderService {
   Future<bool> get _canScheduleExact async =>
       await _android?.canScheduleExactNotifications() ?? false;
 
-  Future<void> scheduleTemplates(List<DbRow> templates) async {
+  Future<void> scheduleTemplates(List<DbRow> templates, {
+    String strictness = 'Seimbang', List<DbRow> todayTasks = const [],
+  }) async {
     await initialize();
     if (!_isAndroid) return;
+    final now = tz.TZDateTime.now(tz.local);
+    final plan = ScheduleReminderPlanner.plan(templates,
+        now: now, strictness: strictness, todayTasks: todayTasks);
+    // Validate capacity before cancelling the existing working reminders.
     await cancelSchedule();
     final mode = await _canScheduleExact
         ? AndroidScheduleMode.exactAllowWhileIdle
         : AndroidScheduleMode.inexactAllowWhileIdle;
-    final now = tz.TZDateTime.now(tz.local);
-    for (final template in templates.where((row) => row.flag('isActive'))) {
-      final time = template.text('startTime').split(':');
-      final hour = int.parse(time[0]);
-      final minute = int.parse(time[1]);
-      final weekdays = (jsonDecode(template.text('daysOfWeek', '[1,2,3,4,5,6,7]'))
-              as List<dynamic>)
-          .map((value) => int.parse('$value'));
-      for (final weekday in weekdays) {
-        var next = tz.TZDateTime(
-          tz.local, now.year, now.month, now.day, hour, minute,
-        );
-        while (next.weekday != weekday || !next.isAfter(now)) {
-          next = tz.TZDateTime(
-            tz.local, next.year, next.month, next.day + 1, hour, minute,
-          );
-        }
+    for (final reminder in plan) {
         await _notifications.zonedSchedule(
-          10000 + template.number('id') * 10 + weekday,
-          template.text('title'),
-          'Kembali ke blok berikutnya. Mulai dari satu langkah kecil.',
-          next,
+          reminder.id,
+          reminder.title,
+          reminder.body,
+          tz.TZDateTime.from(reminder.at, tz.local),
           const NotificationDetails(
             android: AndroidNotificationDetails(
               'mula_schedule', 'Blok harian MULA',
@@ -160,10 +150,8 @@ class ReminderService {
             ),
           ),
           androidScheduleMode: mode,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
           payload: 'schedule',
         );
-      }
     }
   }
 

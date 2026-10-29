@@ -34,7 +34,7 @@ class AppDatabase {
     return _factory.openDatabase(
       databasePath,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         singleInstance: _singleInstance,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
@@ -46,9 +46,11 @@ class AppDatabase {
             await database.execute(statement);
           }
           await _upgradeToPhaseTwo(database);
+          await _upgradeToPhaseThree(database);
         },
         onUpgrade: (database, oldVersion, newVersion) async {
           if (oldVersion < 2) await _upgradeToPhaseTwo(database);
+          if (oldVersion < 3) await _upgradeToPhaseThree(database);
         },
       ),
     );
@@ -58,6 +60,18 @@ class AppDatabase {
     final opening = _opening;
     _opening = null;
     if (opening != null) await (await opening).close();
+  }
+
+  static Future<void> _upgradeToPhaseThree(DatabaseExecutor database) async {
+    await database.execute('ALTER TABLE daily_tasks ADD COLUMN scheduleStartTime TEXT');
+    await database.execute('ALTER TABLE daily_tasks ADD COLUMN scheduleEndTime TEXT');
+    await database.execute('ALTER TABLE daily_tasks ADD COLUMN scheduleTitle TEXT');
+    await database.execute("ALTER TABLE schedule_templates ADD COLUMN effectiveFrom TEXT NOT NULL DEFAULT ''");
+    await database.execute('''UPDATE daily_tasks SET
+      scheduleStartTime = (SELECT startTime FROM schedule_templates WHERE id = sourceScheduleId),
+      scheduleEndTime = (SELECT endTime FROM schedule_templates WHERE id = sourceScheduleId),
+      scheduleTitle = (SELECT title FROM schedule_templates WHERE id = sourceScheduleId)
+      WHERE sourceScheduleId IS NOT NULL''');
   }
 
   static Future<void> _upgradeToPhaseTwo(DatabaseExecutor database) async {

@@ -284,7 +284,8 @@ void main() {
           options: OpenDatabaseOptions(version: 1, singleInstance: false,
               onCreate: (database, version) async {
         await database.execute('CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)');
-        await database.execute('CREATE TABLE daily_tasks (id INTEGER PRIMARY KEY, userId INTEGER, date TEXT, priority TEXT, title TEXT, status TEXT, points INTEGER)');
+        await database.execute('CREATE TABLE schedule_templates (id INTEGER PRIMARY KEY, title TEXT, startTime TEXT, endTime TEXT)');
+        await database.execute('CREATE TABLE daily_tasks (id INTEGER PRIMARY KEY, userId INTEGER, date TEXT, priority TEXT, title TEXT, status TEXT, points INTEGER, sourceScheduleId INTEGER)');
         await database.execute('CREATE TABLE daily_scores (id INTEGER PRIMARY KEY, userId INTEGER, date TEXT, totalScore INTEGER)');
         await database.execute('CREATE TABLE app_preferences (key TEXT PRIMARY KEY, value TEXT)');
         await database.insert('users', {'id': 1, 'name': 'Anggit'});
@@ -298,7 +299,7 @@ void main() {
       await old.close();
       migrated = AppDatabase(factory: databaseFactoryFfi, databasePath: databasePath, singleInstance: false);
       final database = await migrated.database;
-      expect(await database.getVersion(), 2);
+      expect(await database.getVersion(), 3);
       final tasks = await database.query('daily_tasks', orderBy: 'id');
       expect(tasks, hasLength(2));
       expect(tasks.first.text('title'), 'Hasil lama 1');
