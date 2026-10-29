@@ -70,7 +70,9 @@ class ScheduleReminderPlanner {
       for (var offset = todayTasks.isEmpty ? 0 : 1; offset <= horizonDays; offset++) {
         final next = _at(now, now.year, now.month, now.day + offset, time.$1, time.$2);
         if (!weekdays.contains(next.weekday) || !next.isAfter(now) ||
-            (effectiveFrom.isNotEmpty && _dateKey(next).compareTo(effectiveFrom) < 0)) continue;
+            (effectiveFrom.isNotEmpty && _dateKey(next).compareTo(effectiveFrom) < 0)) {
+          continue;
+        }
         add(template.text('title'), next, snapshot: false, lead: 0);
         if (leadMinutes > 0) {
           final leadAt = next.subtract(Duration(minutes: leadMinutes));
@@ -84,7 +86,9 @@ class ScheduleReminderPlanner {
 
     for (final task in todayTasks) {
       if (task.number('sourceScheduleId') <= 0 ||
-          (task.text('date').isNotEmpty && task.text('date') != today)) continue;
+          (task.text('date').isNotEmpty && task.text('date') != today)) {
+        continue;
+      }
       final startTime = task.text('startTime', task.text('scheduleStartTime'));
       if (startTime.isEmpty) continue;
       final time = _time(startTime);

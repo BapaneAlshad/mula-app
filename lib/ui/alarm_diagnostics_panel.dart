@@ -65,8 +65,10 @@ class _AlarmDiagnosticsPageState extends ConsumerState<AlarmDiagnosticsPage>
     try {
       await action();
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Pemeriksaan belum selesai: $error')));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

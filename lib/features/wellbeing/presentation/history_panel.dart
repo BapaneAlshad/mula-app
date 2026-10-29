@@ -71,9 +71,9 @@ class _HistoryPanelState extends ConsumerState<HistoryPanel>
             tooltip: 'Bulan berikutnya', icon: const Icon(Icons.chevron_right_rounded)),
         ]),
         const SizedBox(height: 8),
-        const Row(children: [
+        Row(children: [
           for (final label in ['S', 'S', 'R', 'K', 'J', 'S', 'M'])
-            Expanded(child: Center(child: Text(label, style: TextStyle(fontSize: 11)))),
+            Expanded(child: Center(child: Text(label, style: const TextStyle(fontSize: 11)))),
         ]),
         const SizedBox(height: 8),
         monthly.when(
