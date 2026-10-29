@@ -14,7 +14,11 @@ if (fs.existsSync(keystoreFile) || fs.existsSync(credentialsFile)) {
 fs.mkdirSync(folder, { recursive: true, mode: 0o700 });
 if (process.platform === 'win32') {
   const user = execFileSync('whoami', [], { encoding: 'utf8' }).trim();
-  execFileSync('icacls', [folder, '/inheritance:r', '/grant:r', `${user}:(OI)(CI)F`, 'SYSTEM:(OI)(CI)F'], { stdio: 'pipe' });
+  const owner = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    '(Get-Acl -LiteralPath (Get-Location).Path).Owner'], { encoding: 'utf8' }).trim();
+  const identities = [...new Set([user.toLowerCase(), owner.toLowerCase()])];
+  execFileSync('icacls', [folder, '/inheritance:r', '/grant:r',
+    ...identities.map((identity) => `${identity}:(OI)(CI)F`), 'SYSTEM:(OI)(CI)F'], { stdio: 'pipe' });
 }
 const password = randomBytes(32).toString('hex');
 const openssl = process.env.MULA_OPENSSL ?? (process.platform === 'win32'
