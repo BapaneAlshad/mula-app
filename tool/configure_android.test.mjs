@@ -65,6 +65,10 @@ for (const [language, template, kotlin] of [
     assert.match(configured, /key\.properties/);
     assert.match(configured, /PKCS12/);
     assert.ok(configured.indexOf('plugins') < configured.indexOf('mulaSigningProperties'));
+    if (kotlin) {
+      assert.match(configured, /^import java\.util\.Properties/);
+      assert.doesNotMatch(configured, /java\.util\.Properties\(\)/);
+    }
     assert.doesNotMatch(configured, /(?:isMinifyEnabled|minifyEnabled)\s*(?:=\s*)?false/);
     assert.doesNotMatch(configured, /dontoptimize|dontobfuscate|dontshrink/);
   });

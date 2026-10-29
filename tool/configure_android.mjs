@@ -16,13 +16,14 @@ export function configureGradle(source, kotlin) {
   };
 
   if (kotlin) {
-    result = 'val mulaSigningProperties = java.util.Properties().apply {\n' +
+    const signingProperties = 'val mulaSigningProperties = Properties().apply {\n' +
       '    val propertiesFile = rootProject.file("key.properties")\n' +
       '    if (propertiesFile.exists()) propertiesFile.inputStream().use { load(it) }\n' +
-      '}\n\n' + result;
-    // Gradle requires the plugins block before ordinary declarations.
-    result = result.replace(/^(val mulaSigningProperties[\s\S]*?\}\n\n)([\s\S]*?plugins\s*\{[^}]*\})/,
-      '$2\n\n$1');
+      '}\n';
+    // Import explicitly: Gradle's java extension shadows the java package.
+    // The plugins block must precede ordinary declarations.
+    result = 'import java.util.Properties\n\n' + result.replace(/(plugins\s*\{[^}]*\})/,
+      `$1\n\n${signingProperties}`);
     required(/android\s*\{/, 'android {\n' +
       '    signingConfigs {\n' +
       '        if (mulaSigningProperties.isNotEmpty()) create("mulaRelease") {\n' +
@@ -71,7 +72,7 @@ export function configureGradle(source, kotlin) {
       '                storeType mulaSigningProperties.getProperty("storeType", "PKCS12")\n' +
       '            }\n        }\n    }', 'android signing configs');
     required(/signingConfig\s+(?:=\s*)?signingConfigs\.debug/,
-      'signingConfig mulaSigningProperties.isEmpty() ? signingConfigs.debug : signingConfigs.mulaRelease', 'release signing');
+      'signingConfig = mulaSigningProperties.isEmpty() ? signingConfigs.debug : signingConfigs.mulaRelease', 'release signing');
     required(/^([ \t]*)compileSdk(?:Version)?\s*(?:=\s*)?.*$/m,
       '$1compileSdk Math.max(36, flutter.compileSdkVersion)', 'compileSdk');
     required(/^([ \t]*)minSdk(?:Version)?\s*(?:=\s*)?.*$/m,
