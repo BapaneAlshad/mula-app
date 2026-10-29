@@ -25,6 +25,7 @@ class ScheduleReminderPlanner {
     required DateTime now,
     String strictness = 'Seimbang',
     List<DbRow> todayTasks = const [],
+    bool includeToday = true,
   }) {
     final leadMinutes = switch (strictness) {
       'Lembut' => 0,
@@ -67,7 +68,7 @@ class ScheduleReminderPlanner {
       final weekdays = decodedDays.cast<int>().toSet();
       // FLN's weekly date-component matching ignores the initial calendar date.
       // Explicit one-shots preserve effectiveFrom and avoid duplicate alarms today.
-      for (var offset = todayTasks.isEmpty ? 0 : 1; offset <= horizonDays; offset++) {
+      for (var offset = todayTasks.isEmpty && includeToday ? 0 : 1; offset <= horizonDays; offset++) {
         final next = _at(now, now.year, now.month, now.day + offset, time.$1, time.$2);
         if (!weekdays.contains(next.weekday) || !next.isAfter(now) ||
             (effectiveFrom.isNotEmpty && _dateKey(next).compareTo(effectiveFrom) < 0)) {
@@ -85,6 +86,9 @@ class ScheduleReminderPlanner {
     }
 
     for (final task in todayTasks) {
+      if (!includeToday) {
+        continue;
+      }
       if (task.number('sourceScheduleId') <= 0 ||
           (task.text('date').isNotEmpty && task.text('date') != today)) {
         continue;

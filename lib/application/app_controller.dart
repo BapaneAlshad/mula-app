@@ -79,10 +79,11 @@ class AppController extends AsyncNotifier<AppSnapshot> {
   Future<void> _restoreReminders(AppSnapshot snapshot) async {
     try {
       await _reminders.initialize();
-      if (snapshot.preferences['reminders'] == 'true' && snapshot.score.text('dayMode') != 'Minimum') {
+      if (snapshot.preferences['reminders'] == 'true') {
         await _reminders.scheduleTemplates(snapshot.templates,
-          strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks);
-      } else if (snapshot.score.text('dayMode') == 'Minimum') {
+          strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks,
+          includeToday: snapshot.score.text('dayMode') != 'Minimum');
+      } else {
         await _reminders.cancelSchedule();
       }
       if (snapshot.activeFocus != null) {
@@ -398,20 +399,16 @@ class AppController extends AsyncNotifier<AppSnapshot> {
     await _writePreference('sanctuary', mode == 'Normal' ? 'false' : 'true');
     await _writePreference('sanctuaryDate', _dayKey(_now()));
     if (mode == 'Minimum') {
-      await _reminders.cancelSchedule();
       await _reminders.cancelPlanning();
-    } else if (state.valueOrNull?.preferences['reminders'] == 'true') {
-      final snapshot = await _repository.loadDay(_now());
-      await _reminders.scheduleTemplates(snapshot.templates,
-        strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks);
     }
+    await _restoreReminders(await _repository.loadDay(_now()));
   });
 
   Future<void> enterSanctuary(String reason) => _mutate(() async {
     if (reason == 'Mode Hari Buruk') {
       await _repository.saveDayMode(_dayKey(_now()), 'Minimum', reason: reason);
-      await _reminders.cancelSchedule();
       await _reminders.cancelPlanning();
+      await _restoreReminders(await _repository.loadDay(_now()));
     }
     await _repository.recordAnxiety(
       mode: reason, durationSeconds: 0,
@@ -485,10 +482,9 @@ class AppController extends AsyncNotifier<AppSnapshot> {
       throw StateError('Izin notifikasi belum diberikan. Aktifkan di pengaturan Android.');
     }
     final snapshot = await _repository.loadDay(_now());
-    if (snapshot.score.text('dayMode') != 'Minimum') {
-      await _reminders.scheduleTemplates(snapshot.templates,
-        strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks);
-    }
+    await _reminders.scheduleTemplates(snapshot.templates,
+      strictness: snapshot.user.text('strictnessLevel', 'Seimbang'), todayTasks: snapshot.tasks,
+      includeToday: snapshot.score.text('dayMode') != 'Minimum');
     await _writePreference('reminders', 'true');
   });
 

@@ -35,6 +35,17 @@ void main() {
     }
   });
 
+  test('minimum silences today but preserves dated reminders on following days', () {
+    for (final tasks in <List<DbRow>>[[], [task()]]) {
+      final plan = ScheduleReminderPlanner.plan([template(days: '[1,2,3,4,5,6,7]')],
+        now: now, todayTasks: tasks, includeToday: false);
+      expect(plan, isNotEmpty);
+      expect(plan.any((row) => row.fromTodaySnapshot), isFalse);
+      expect(plan.every((row) => row.at.isAfter(DateTime.utc(2026, 10, 30))), isTrue);
+      expect(plan.first.at.day, 30);
+    }
+  });
+
   test('future template edit preserves today old time and title with no duplicate today alarm', () {
     final plan = ScheduleReminderPlanner.plan([template(effective: '2026-10-30')],
         now: now, todayTasks: [task()], strictness: 'Tegas');

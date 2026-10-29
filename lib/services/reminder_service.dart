@@ -123,12 +123,13 @@ class ReminderService {
 
   Future<void> scheduleTemplates(List<DbRow> templates, {
     String strictness = 'Seimbang', List<DbRow> todayTasks = const [],
+    bool includeToday = true,
   }) async {
     await initialize();
     if (!_isAndroid) return;
     final now = tz.TZDateTime.now(tz.local);
     final plan = ScheduleReminderPlanner.plan(templates,
-        now: now, strictness: strictness, todayTasks: todayTasks);
+        now: now, strictness: strictness, todayTasks: todayTasks, includeToday: includeToday);
     // Validate capacity before cancelling the existing working reminders.
     await cancelSchedule();
     final mode = await _canScheduleExact

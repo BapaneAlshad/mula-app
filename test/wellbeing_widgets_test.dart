@@ -7,6 +7,7 @@ import 'package:mula/data/wellbeing_repository.dart';
 import 'package:mula/domain/app_snapshot.dart';
 import 'package:mula/features/wellbeing/application/wellbeing_providers.dart';
 import 'package:mula/features/wellbeing/presentation/anxiety_session_page.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   testWidgets('resumed grounding displays saved checks and sends the next change', (tester) async {
@@ -49,7 +50,7 @@ void main() {
 }
 
 class _SavedSessionRepository extends WellbeingRepository {
-  _SavedSessionRepository(this.savedSession) : super(AppDatabase());
+  _SavedSessionRepository(this.savedSession) : super(AppDatabase(factory: databaseFactoryFfi));
   final DbRow savedSession;
   int? savedGroundingIndex;
   bool? savedGroundingValue;
